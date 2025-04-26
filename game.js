@@ -1,7 +1,7 @@
 // Game constants
 const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const GRID_SIZE = 8; // Keep 8x8x8 grid
-const UNIT_SIZE = IS_MOBILE ? 1.2 : 1.25; // Increased unit size on mobile for bigger grid
+const UNIT_SIZE = IS_MOBILE ? 1.5 : 1.25; // Increased unit size by 50% on mobile
 const GRID_UNITS = GRID_SIZE / UNIT_SIZE;
 const MOVE_INTERVAL = 400; // Slowed down from 300ms to 400ms for slower snake movement
 const QUICK_RESPONSE_DELAY = 150; // delay for immediate moves (slower than instant but faster than interval)
@@ -58,8 +58,8 @@ function init() {
     // Adjust camera position based on physical size and device
     if (IS_MOBILE) {
         // Position farther back on mobile so the whole grid is visible
-        // Move the camera up higher to make room for controls below
-        camera.position.set(totalSize * 1.8, totalSize * 2.2, totalSize * 2.8);
+        // Move the camera even higher to match the screenshot reference
+        camera.position.set(totalSize * 1.8, totalSize * 3.0, totalSize * 2.8);
     } else {
         camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
     }
@@ -109,76 +109,66 @@ function init() {
 
 // Create mobile control buttons
 function createMobileControls() {
-    // Create plus-shaped control layout
+    // Create control container that will be positioned at the bottom
     const controlsContainer = document.createElement('div');
     controlsContainer.id = 'mobile-controls';
     controlsContainer.style.position = 'fixed';
-    controlsContainer.style.bottom = '30px';
+    controlsContainer.style.bottom = '50px';
     controlsContainer.style.left = '0';
     controlsContainer.style.width = '100%';
     controlsContainer.style.zIndex = '1000';
     
-    // Create a div for the plus shape layout
-    const plusLayout = document.createElement('div');
-    plusLayout.style.position = 'relative';
-    plusLayout.style.width = '240px';
-    plusLayout.style.height = '240px';
-    plusLayout.style.margin = '0 auto';
+    // Create a grid layout for the buttons
+    const buttonGrid = document.createElement('div');
+    buttonGrid.style.display = 'grid';
+    buttonGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    buttonGrid.style.gridTemplateRows = 'repeat(2, 1fr)';
+    buttonGrid.style.gap = '10px';
+    buttonGrid.style.width = '80%';
+    buttonGrid.style.maxWidth = '350px';
+    buttonGrid.style.margin = '0 auto';
     
-    // Create buttons
-    // Green buttons (Y-axis)
-    const upButton = createDirectionButton('↑', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: 1, z: 0 }));
-    const downButton = createDirectionButton('↓', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: -1, z: 0 }));
-    
-    // Red buttons (X-axis)
+    // Create buttons with same styling as in the reference image
+    // Left button (red)
     const leftButton = createDirectionButton('←', COLORS.xAxis, () => queueDirectionChange({ x: -1, y: 0, z: 0 }));
+    leftButton.style.gridColumn = '1';
+    leftButton.style.gridRow = '1';
+    
+    // Right button (red)
     const rightButton = createDirectionButton('→', COLORS.xAxis, () => queueDirectionChange({ x: 1, y: 0, z: 0 }));
+    rightButton.style.gridColumn = '2';
+    rightButton.style.gridRow = '1';
     
-    // Blue buttons (Z-axis)
+    // Up button (green)
+    const upButton = createDirectionButton('↑', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: 1, z: 0 }));
+    upButton.style.gridColumn = '1';
+    upButton.style.gridRow = '2';
+    
+    // Down button (green)
+    const downButton = createDirectionButton('↓', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: -1, z: 0 }));
+    downButton.style.gridColumn = '2';
+    downButton.style.gridRow = '2';
+    
+    // In button (blue - forward/z-axis negative)
     const inButton = createDirectionButton('↗', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: -1 }));
+    inButton.style.gridColumn = '3';
+    inButton.style.gridRow = '1';
+    
+    // Out button (blue - backward/z-axis positive)
     const outButton = createDirectionButton('↙', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: 1 }));
+    outButton.style.gridColumn = '3';
+    outButton.style.gridRow = '2';
     
-    // Position the buttons in a plus shape
-    // Top (Green Up)
-    upButton.style.position = 'absolute';
-    upButton.style.top = '0';
-    upButton.style.left = '90px';
+    // Add buttons to the grid
+    buttonGrid.appendChild(leftButton);
+    buttonGrid.appendChild(rightButton);
+    buttonGrid.appendChild(upButton);
+    buttonGrid.appendChild(downButton);
+    buttonGrid.appendChild(inButton);
+    buttonGrid.appendChild(outButton);
     
-    // Right (Red Right)
-    rightButton.style.position = 'absolute';
-    rightButton.style.top = '90px';
-    rightButton.style.right = '0';
-    
-    // Bottom (Green Down)
-    downButton.style.position = 'absolute';
-    downButton.style.bottom = '0';
-    downButton.style.left = '90px';
-    
-    // Left (Red Left)
-    leftButton.style.position = 'absolute';
-    leftButton.style.top = '90px';
-    leftButton.style.left = '0';
-    
-    // Top-right corner (Blue In)
-    inButton.style.position = 'absolute';
-    inButton.style.top = '0';
-    inButton.style.right = '0';
-    
-    // Bottom-left corner (Blue Out)
-    outButton.style.position = 'absolute';
-    outButton.style.bottom = '0';
-    outButton.style.left = '0';
-    
-    // Add buttons to the plus layout
-    plusLayout.appendChild(upButton);
-    plusLayout.appendChild(rightButton);
-    plusLayout.appendChild(downButton);
-    plusLayout.appendChild(leftButton);
-    plusLayout.appendChild(inButton);
-    plusLayout.appendChild(outButton);
-    
-    // Add the plus layout to the container
-    controlsContainer.appendChild(plusLayout);
+    // Add the button grid to the main container
+    controlsContainer.appendChild(buttonGrid);
     
     // Add container to the document
     document.body.appendChild(controlsContainer);
@@ -197,16 +187,16 @@ function createDirectionButton(arrowSymbol, color, clickHandler) {
         return `rgb(${r}, ${g}, ${b})`;
     };
     
-    // Style the button
-    button.style.width = '60px';
-    button.style.height = '60px';
+    // Style the button to match the reference image
+    button.style.width = '100%';
+    button.style.height = '65px';
     button.style.fontSize = '30px';
-    button.style.borderRadius = '15px';
+    button.style.borderRadius = '8px';
     button.style.background = hexToRgb(color);
     button.style.color = 'white';
     button.style.fontWeight = 'bold';
     button.style.border = 'none';
-    button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.5)';
+    button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
     button.style.outline = 'none';
     button.style.cursor = 'pointer';
     button.style.display = 'flex';
@@ -216,13 +206,13 @@ function createDirectionButton(arrowSymbol, color, clickHandler) {
     // Add active feedback
     button.addEventListener('touchstart', (e) => {
         button.style.transform = 'scale(0.95)';
-        button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.5)';
+        button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
         e.preventDefault(); // Prevent default to avoid double-tap zooming
     });
     
     button.addEventListener('touchend', (e) => {
         button.style.transform = 'scale(1)';
-        button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.5)';
+        button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
         clickHandler();
         e.preventDefault(); // Prevent default behavior
     });
