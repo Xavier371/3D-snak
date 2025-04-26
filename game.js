@@ -1,7 +1,7 @@
 // Game constants
 const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-const GRID_SIZE = 8; // Back to 8x8x8 grid
-const UNIT_SIZE = 1.25; // Increased unit size to make the whole cube physically larger
+const GRID_SIZE = 8; // Keep 8x8x8 grid
+const UNIT_SIZE = IS_MOBILE ? 0.8 : 1.25; // Even smaller unit size on mobile
 const GRID_UNITS = GRID_SIZE / UNIT_SIZE;
 const MOVE_INTERVAL = 400; // Slowed down from 300ms to 400ms for slower snake movement
 const QUICK_RESPONSE_DELAY = 150; // delay for immediate moves (slower than instant but faster than interval)
@@ -39,61 +39,191 @@ const restartButton = document.getElementById('restartButton');
 
 // Initialize the game
 function init() {
-    // Create scene
+    // Create scene, camera, and renderer
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111); // subtle dark background
-
-    // Create camera looking at the grid from a rotated position
+    
+    // Set up camera
     camera = new THREE.PerspectiveCamera(
-        50, // Increased field of view to see more of the scene
-        window.innerWidth / window.innerHeight,
-        0.1,
+        isMobile() ? 65 : 45, 
+        window.innerWidth / window.innerHeight, 
+        0.1, 
         1000
     );
     
-    // Position camera to see the larger physical cube
-    // Calculate actual physical size of the cube: GRID_SIZE * UNIT_SIZE
-    const totalSize = GRID_SIZE * UNIT_SIZE; // Physical size of the cube
-    
-    // Adjust camera position based on physical size
-    camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
-    camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
-
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000);
     document.body.appendChild(renderer.domElement);
-
-    // Create a group to hold everything - grid, axes, floor
-    gameGroup = new THREE.Group();
     
-    // Set the pivot point at the origin (0,0,0) where the colored vectors meet
-    gameGroup.position.set(0, 0, 0);
+    // Add orbit controls for desktop
+    if (!isMobile()) {
+        orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
+        orbitControls.enableDamping = true;
+        orbitControls.dampingFactor = 0.05;
+        orbitControls.screenSpacePanning = false;
+        orbitControls.enableZoom = true;
+        orbitControls.enablePan = false;
+    } else {
+        // Setup touch controls for mobile
+        setupTouchControls();
+        
+        // Add mobile instruction overlay
+        createMobileInstructions();
+    }
     
-    scene.add(gameGroup);
-
-    // Add grid for reference
+    // Initialize the game
+    resetGame();
+    
+    // Create the grid
     createGrid();
-
-    // Initialize snake
-    createSnake();
-
-    // Create first food
-    createFood();
-
-    // Add event listeners
-    window.addEventListener('keydown', handleKeyPress);
-    window.addEventListener('resize', handleResize);
-    restartButton.addEventListener('click', restartGame);
     
-    // Add touch event listeners for mobile
-    renderer.domElement.addEventListener('touchstart', handleTouchStart, false);
-    renderer.domElement.addEventListener('touchmove', handleTouchMove, false);
-    renderer.domElement.addEventListener('touchend', handleTouchEnd, false);
-
-    // Start game loop
-    moveTimer = setInterval(moveSnake, MOVE_INTERVAL);
+    // Add lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 10, 7);
+    scene.add(directionalLight);
+    
+    // Add window resize listener
+    window.addEventListener('resize', onWindowResize, false);
+    
+    // Set up keyboard controls
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Add score display
+    createScoreDisplay();
+    
+    // Start the animation loop
     animate();
+}
+
+// Helper function to detect mobile devices
+function isMobile() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+}
+
+// Create mobile instruction overlay
+function createMobileInstructions() {
+    const instructionsDiv = document.createElement('div');
+    instructionsDiv.id = 'mobile-instructions';
+    instructionsDiv.innerHTML = `
+        <div class="instruction-box">
+            <h2>3D Snake</h2>
+            <p>Swipe to change direction.</p>
+            <p>Red = X axis, Green = Y axis, Blue = Z axis</p>
+            <div class="axis-indicators">
+                <span class="axis-dot x-axis">X</span>
+                <span class="axis-dot y-axis">Y</span>
+                <span class="axis-dot z-axis">Z</span>
+            </div>
+            <button id="start-game">Start Game</button>
+        </div>
+    `;
+    document.body.appendChild(instructionsDiv);
+    
+    // Add styles for the instructions
+    const style = document.createElement('style');
+    style.textContent = `
+        #mobile-instructions {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .instruction-box {
+            background-color: #222;
+            border-radius: 10px;
+            padding: 20px;
+            max-width: 80%;
+            text-align: center;
+            color: white;
+            box-shadow: 0 0 20px rgba(255,255,255,0.2);
+        }
+        .instruction-box h2 {
+            margin-top: 0;
+            color: #ddd;
+        }
+        .axis-indicators {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+        }
+        .axis-dot {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            line-height: 30px;
+            font-weight: bold;
+            color: white;
+        }
+        .x-axis { background-color: rgba(255, 0, 0, 0.8); }
+        .y-axis { background-color: rgba(0, 255, 0, 0.8); }
+        .z-axis { background-color: rgba(0, 136, 255, 0.8); }
+        #start-game {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Add start game button event
+    document.getElementById('start-game').addEventListener('click', function() {
+        document.getElementById('mobile-instructions').style.display = 'none';
+        gameActive = true;
+    });
+    
+    // Pause game until instructions are closed
+    gameActive = false;
+}
+
+// Create score display
+function createScoreDisplay() {
+    const scoreDiv = document.createElement('div');
+    scoreDiv.id = 'score-display';
+    scoreDiv.innerHTML = `Score: 0`;
+    document.body.appendChild(scoreDiv);
+    
+    // Add styles for the score display
+    const style = document.createElement('style');
+    style.textContent = `
+        #score-display {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 18px;
+            font-family: Arial, sans-serif;
+            z-index: 100;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Update score function
+    updateScore = function(newScore) {
+        score = newScore;
+        document.getElementById('score-display').innerHTML = `Score: ${score}`;
+    };
 }
 
 // Create reference grid
@@ -107,7 +237,7 @@ function createGrid() {
     const gridMaterial = new THREE.LineBasicMaterial({ 
         color: COLORS.gridLines,
         transparent: false,
-        linewidth: 3
+        linewidth: IS_MOBILE ? 2 : 3 // Slightly thinner lines on mobile for cleaner appearance
     });
     
     // Create the grid box as a wireframe
@@ -133,16 +263,15 @@ function createGrid() {
     addAxesAtCorner();
     
     // Rotate the entire game group around the origin (where the vectors meet)
-    // Previous rotation was -0.05π (-9 degrees)
-    // Add 10 degrees (approximately 0.055π) for a slight clockwise adjustment
-    gameGroup.rotation.y = Math.PI * 0.005; // ~1 degree clockwise
+    // For better visibility on mobile, rotate slightly more
+    gameGroup.rotation.y = Math.PI * (IS_MOBILE ? 0.05 : 0.005); // ~1-9 degrees clockwise
 }
 
 // Add axes at the proper corner of the grid
 function addAxesAtCorner() {
     const totalSize = GRID_SIZE * UNIT_SIZE;
     const axisLength = totalSize;
-    const axisWidth = 3;
+    const axisWidth = IS_MOBILE ? 4 : 3; // Thicker lines for mobile
     
     // Position axes at the (0,0,0) corner of the grid
     // Since the grid is centered at (totalSize/2, totalSize/2, totalSize/2)
@@ -158,8 +287,8 @@ function addAxesAtCorner() {
     const xAxis = new THREE.Line(xAxisGeo, xAxisMat);
     gameGroup.add(xAxis);
     
-    // Add red arrow for X-axis
-    const xArrowGeo = new THREE.ConeGeometry(0.3, 0.6, 12);
+    // Add red arrow for X-axis - bigger for mobile
+    const xArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.4 : 0.3, IS_MOBILE ? 0.8 : 0.6, 12);
     const xArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.xAxis });
     const xArrow = new THREE.Mesh(xArrowGeo, xArrowMat);
     xArrow.position.set(axisLength, 0, 0);
@@ -176,8 +305,8 @@ function addAxesAtCorner() {
     const yAxis = new THREE.Line(yAxisGeo, yAxisMat);
     gameGroup.add(yAxis);
     
-    // Add green arrow for Y-axis
-    const yArrowGeo = new THREE.ConeGeometry(0.3, 0.6, 12);
+    // Add green arrow for Y-axis - bigger for mobile
+    const yArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.4 : 0.3, IS_MOBILE ? 0.8 : 0.6, 12);
     const yArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.yAxis });
     const yArrow = new THREE.Mesh(yArrowGeo, yArrowMat);
     yArrow.position.set(0, axisLength, 0);
@@ -193,13 +322,43 @@ function addAxesAtCorner() {
     const zAxis = new THREE.Line(zAxisGeo, zAxisMat);
     gameGroup.add(zAxis);
     
-    // Add blue arrow for Z-axis
-    const zArrowGeo = new THREE.ConeGeometry(0.3, 0.6, 12);
+    // Add blue arrow for Z-axis - bigger for mobile
+    const zArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.4 : 0.3, IS_MOBILE ? 0.8 : 0.6, 12);
     const zArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.zAxis });
     const zArrow = new THREE.Mesh(zArrowGeo, zArrowMat);
     zArrow.position.set(0, 0, axisLength);
     zArrow.rotation.x = Math.PI / 2;
     gameGroup.add(zArrow);
+    
+    // Add small text labels to indicate colors for mobile users
+    if (IS_MOBILE) {
+        // Add small colored spheres at the end of each axis to reinforce colors
+        const sphereSize = 0.35;
+        
+        // X-axis indicator (Red)
+        const xSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(sphereSize, 16, 16),
+            new THREE.MeshBasicMaterial({ color: COLORS.xAxis })
+        );
+        xSphere.position.set(axisLength * 0.7, 0, 0);
+        gameGroup.add(xSphere);
+        
+        // Y-axis indicator (Green)
+        const ySphere = new THREE.Mesh(
+            new THREE.SphereGeometry(sphereSize, 16, 16),
+            new THREE.MeshBasicMaterial({ color: COLORS.yAxis })
+        );
+        ySphere.position.set(0, axisLength * 0.7, 0);
+        gameGroup.add(ySphere);
+        
+        // Z-axis indicator (Blue)
+        const zSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(sphereSize, 16, 16),
+            new THREE.MeshBasicMaterial({ color: COLORS.zAxis })
+        );
+        zSphere.position.set(0, 0, axisLength * 0.7);
+        gameGroup.add(zSphere);
+    }
 }
 
 // Create initial snake
@@ -325,50 +484,77 @@ function handleTouchEnd(event) {
     
     // Minimum swipe distance and maximum time for a swipe to be recognized
     // Reduced min distance to make swipes easier to register
-    const minSwipeDistance = 20; 
-    const maxSwipeTime = 400; // Increased time window to recognize swipes
+    const minSwipeDistance = 15; // Even lower for easier swipes
+    const maxSwipeTime = 500; // Longer time window for recognizing swipes
     
     // Check if the touch was quick enough to be a swipe
     if (deltaTime <= maxSwipeTime) {
-        // Determine swipe direction
-        const absX = Math.abs(deltaX);
-        const absY = Math.abs(deltaY);
+        // Get normalized vector of the swipe to compare with axis directions
+        const swipeLength = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        if (swipeLength < minSwipeDistance) return; // Too small to be a valid swipe
+        
+        // Normalize the 2D swipe vector
+        const normalizedDeltaX = deltaX / swipeLength;
+        const normalizedDeltaY = deltaY / swipeLength;
+        
+        // Get the camera's viewing direction to determine swipe direction in 3D
+        // We need to transform screen space swipes to world space directions
+        
+        // Get camera's right vector (X-axis in view space)
+        const cameraRight = new THREE.Vector3(1, 0, 0);
+        cameraRight.applyQuaternion(camera.quaternion);
+        
+        // Get camera's up vector (Y-axis in view space)
+        const cameraUp = new THREE.Vector3(0, 1, 0);
+        cameraUp.applyQuaternion(camera.quaternion);
+        
+        // Get camera's forward vector (Z-axis in view space, pointing into screen)
+        const cameraForward = new THREE.Vector3(0, 0, -1);
+        cameraForward.applyQuaternion(camera.quaternion);
+        
+        // Project swipe onto the 3 world axes using dot products
+        // This will tell us how much the swipe aligns with each world axis
+        // First calculate component in each direction
+        const rightComponent = normalizedDeltaX * cameraRight.x + normalizedDeltaY * cameraRight.y;
+        const upComponent = normalizedDeltaX * cameraUp.x + normalizedDeltaY * cameraUp.y;
+        const forwardComponent = normalizedDeltaX * cameraForward.x + normalizedDeltaY * cameraForward.y;
+        
+        // Find which component is largest (this is the primary swipe direction)
+        const absRightComp = Math.abs(rightComponent);
+        const absUpComp = Math.abs(upComponent);
+        const absForwardComp = Math.abs(forwardComponent);
         
         let swipeProcessed = false;
         
-        // SIMPLIFIED SWIPE LOGIC:
-        
-        // If it's more of a horizontal swipe
-        if (absX > absY) {
-            if (deltaX > minSwipeDistance) {
+        // Determine which world axis the swipe is most aligned with
+        if (absRightComp > absUpComp && absRightComp > absForwardComp) {
+            // X-axis movement (Red axis)
+            if (rightComponent > 0) {
                 // Right swipe - X axis positive
                 swipeProcessed = queueDirectionChange({ x: 1, y: 0, z: 0 });
-            } else if (deltaX < -minSwipeDistance) {
+            } else {
                 // Left swipe - X axis negative
                 swipeProcessed = queueDirectionChange({ x: -1, y: 0, z: 0 });
             }
         } 
-        // If it's more of a vertical swipe
-        else if (absY > absX) {
-            // For Y-axis (up/down in game world, not screen)
-            if (deltaY < -minSwipeDistance) {
-                // Upward swipe - Y axis positive  
+        else if (absUpComp > absRightComp && absUpComp > absForwardComp) {
+            // Y-axis movement (Green axis)
+            if (upComponent > 0) {
+                // Up swipe - Y axis positive
                 swipeProcessed = queueDirectionChange({ x: 0, y: 1, z: 0 });
-            } else if (deltaY > minSwipeDistance) {
-                // Downward swipe - Y axis negative
+            } else {
+                // Down swipe - Y axis negative
                 swipeProcessed = queueDirectionChange({ x: 0, y: -1, z: 0 });
             }
-            
-            // If Y-axis direction didn't work (might be blocked), try Z-axis
-            // This helps with the common issue of trying to go "up" in 3D space
-            if (!swipeProcessed) {
-                if (deltaY < -minSwipeDistance) {
-                    // Upward swipe - Try Z axis negative as alternative
-                    swipeProcessed = queueDirectionChange({ x: 0, y: 0, z: -1 });
-                } else if (deltaY > minSwipeDistance) {
-                    // Downward swipe - Try Z axis positive as alternative
-                    swipeProcessed = queueDirectionChange({ x: 0, y: 0, z: 1 });
-                }
+        } 
+        else {
+            // Z-axis movement (Blue axis)
+            if (forwardComponent > 0) {
+                // Forward swipe (into screen) - Z axis positive
+                swipeProcessed = queueDirectionChange({ x: 0, y: 0, z: 1 });
+            } else {
+                // Backward swipe (out of screen) - Z axis negative
+                swipeProcessed = queueDirectionChange({ x: 0, y: 0, z: -1 });
             }
         }
         
@@ -611,4 +797,162 @@ function animate() {
 }
 
 // Start the game when the page loads
-window.onload = init; 
+window.onload = init;
+
+// Handle touch events for mobile
+function setupTouchControls() {
+    const touchSurface = document.getElementById('gameCanvas');
+    let startX, startY, startTime;
+    let endX, endY, elapsedTime;
+
+    const swipeThreshold = 50; // Minimum distance for swipe
+    const swipeRestraint = 100; // Maximum perpendicular distance
+    const maxSwipeTime = 300; // Maximum time for swipe
+
+    touchSurface.addEventListener('touchstart', function(e) {
+        const touchObj = e.changedTouches[0];
+        startX = touchObj.pageX;
+        startY = touchObj.pageY;
+        startTime = new Date().getTime();
+        e.preventDefault();
+    }, false);
+
+    touchSurface.addEventListener('touchend', function(e) {
+        const touchObj = e.changedTouches[0];
+        endX = touchObj.pageX;
+        endY = touchObj.pageY;
+        endTime = new Date().getTime();
+        elapsedTime = endTime - startTime;
+
+        // Calculate distances
+        const distX = endX - startX;
+        const distY = endY - startY;
+        const distZ = Math.sqrt(distX * distX + distY * distY);
+
+        if (elapsedTime <= maxSwipeTime) {
+            // Determine if it's a legitimate swipe
+            if (Math.abs(distX) >= swipeThreshold || Math.abs(distY) >= swipeThreshold) {
+                
+                // Determine swipe direction
+                let direction;
+                if (Math.abs(distX) > Math.abs(distY)) {
+                    // Horizontal swipe
+                    direction = distX > 0 ? 'right' : 'left';
+                } else {
+                    // Vertical swipe
+                    if (Math.abs(distY) > Math.abs(distX) * 2) {
+                        // Clear vertical swipe - forward/backward
+                        direction = distY < 0 ? 'front' : 'back';
+                    } else {
+                        // Regular vertical swipe - up/down
+                        direction = distY < 0 ? 'up' : 'down';
+                    }
+                }
+                
+                // Show visual feedback
+                showSwipeIndicator(endX, endY, direction);
+                
+                // Change direction
+                changeDirection(direction);
+            }
+        }
+        
+        e.preventDefault();
+    }, false);
+}
+
+// Show visual feedback for swipe direction
+function showSwipeIndicator(x, y, direction) {
+    // Create or get existing indicator
+    let indicator = document.getElementById('swipe-indicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'swipe-indicator';
+        document.body.appendChild(indicator);
+        
+        // Style the indicator
+        indicator.style.position = 'absolute';
+        indicator.style.padding = '8px 12px';
+        indicator.style.borderRadius = '5px';
+        indicator.style.fontSize = '16px';
+        indicator.style.fontWeight = 'bold';
+        indicator.style.zIndex = '1000';
+        indicator.style.pointerEvents = 'none';
+        indicator.style.transition = 'opacity 0.5s';
+    }
+    
+    // Set position near swipe end position
+    indicator.style.left = (x - 50) + 'px';
+    indicator.style.top = (y - 30) + 'px';
+    
+    // Set color based on axis
+    let color, text;
+    switch(direction) {
+        case 'left':
+        case 'right':
+            color = 'rgba(255, 0, 0, 0.8)'; // Red for X axis
+            text = direction.charAt(0).toUpperCase() + direction.slice(1);
+            break;
+        case 'up':
+        case 'down':
+            color = 'rgba(0, 255, 0, 0.8)'; // Green for Y axis
+            text = direction.charAt(0).toUpperCase() + direction.slice(1);
+            break;
+        case 'front':
+        case 'back':
+            color = 'rgba(0, 136, 255, 0.8)'; // Blue for Z axis
+            text = direction === 'front' ? 'Forward' : 'Back';
+            break;
+    }
+    
+    indicator.textContent = text;
+    indicator.style.backgroundColor = color;
+    indicator.style.color = 'white';
+    indicator.style.opacity = '1';
+    
+    // Hide after a delay
+    setTimeout(() => {
+        indicator.style.opacity = '0';
+    }, 800);
+    
+    // Remove after fade
+    setTimeout(() => {
+        if (indicator.parentNode) {
+            indicator.parentNode.removeChild(indicator);
+        }
+    }, 1300);
+}
+
+// Change snake direction based on swipe direction
+function changeDirection(swipeDirection) {
+    // Convert swipe direction to actual vector change
+    let newDirection;
+    
+    switch(swipeDirection) {
+        case 'right':
+            newDirection = { x: 1, y: 0, z: 0 };
+            break;
+        case 'left':
+            newDirection = { x: -1, y: 0, z: 0 };
+            break;
+        case 'up':
+            newDirection = { x: 0, y: 1, z: 0 };
+            break;
+        case 'down':
+            newDirection = { x: 0, y: -1, z: 0 };
+            break;
+        case 'front':
+            newDirection = { x: 0, y: 0, z: 1 };
+            break;
+        case 'back':
+            newDirection = { x: 0, y: 0, z: -1 };
+            break;
+    }
+    
+    // Queue the direction change
+    if (newDirection) {
+        queueDirectionChange(newDirection);
+    }
+}
+
+// ... existing code ... 
