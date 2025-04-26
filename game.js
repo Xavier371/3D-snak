@@ -64,6 +64,10 @@ function init() {
 
     // Create a group to hold everything - grid, axes, floor
     gameGroup = new THREE.Group();
+    
+    // Set the pivot point at the origin (0,0,0) where the colored vectors meet
+    gameGroup.position.set(0, 0, 0);
+    
     scene.add(gameGroup);
 
     // Add grid for reference
@@ -126,8 +130,10 @@ function createGrid() {
     // Add colored axes at the proper corner of the grid
     addAxesAtCorner();
     
-    // Rotate the entire game group for better perspective
-    gameGroup.rotation.y = Math.PI * 0.1; // 10% rotation around the y-axis
+    // Rotate the entire game group around the origin (where the vectors meet)
+    // Previous rotation was -0.05π (-9 degrees)
+    // Add 10 degrees (approximately 0.055π) for a slight clockwise adjustment
+    gameGroup.rotation.y = Math.PI * 0.005; // ~1 degree clockwise
 }
 
 // Add axes at the proper corner of the grid
