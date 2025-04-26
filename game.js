@@ -1,7 +1,7 @@
 // Game constants
 const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const GRID_SIZE = 8; // Keep 8x8x8 grid
-const UNIT_SIZE = IS_MOBILE ? 5.0 : 1.25; // Dramatically increased unit size for mobile
+const UNIT_SIZE = IS_MOBILE ? 7.0 : 1.25; // Even larger unit size for mobile
 const GRID_UNITS = GRID_SIZE / UNIT_SIZE;
 const MOVE_INTERVAL = 400; // Slowed down from 300ms to 400ms for slower snake movement
 const QUICK_RESPONSE_DELAY = 150; // delay for immediate moves (slower than instant but faster than interval)
@@ -63,7 +63,7 @@ function init() {
 
     // Create camera looking at the grid from a rotated position
     camera = new THREE.PerspectiveCamera(
-        IS_MOBILE ? 90 : 50, // Extreme wide angle for mobile to see the large grid
+        IS_MOBILE ? 95 : 50, // Very wide angle for mobile to fit the large grid
         window.innerWidth / window.innerHeight,
         0.1,
         1000
@@ -76,28 +76,30 @@ function init() {
     // Adjust camera position based on physical size and device
     if (IS_MOBILE) {
         // Position camera for optimal grid visibility on mobile with much larger grid
-        // Move camera far back to ensure the grid fits in view
-        camera.position.set(totalSize * 1.2, totalSize * 1.8, totalSize * 2.0);
+        // Move camera further back and higher to ensure the grid fits in view
+        camera.position.set(totalSize * 1.3, totalSize * 2.0, totalSize * 2.3);
         
-        // Adjust look at point to center the grid
-        camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
+        // Adjust look at point higher to move the grid up in the viewport
+        camera.lookAt(totalSize * 0.5, totalSize * 0.8, totalSize * 0.5);
+        
+        // Rotate the grid slightly to see it better
+        gameGroup = new THREE.Group();
+        gameGroup.rotation.y = Math.PI * 0.15; // Rotate slightly to improve visibility
     } else {
         camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
         camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
+        gameGroup = new THREE.Group();
     }
-
-    // Create renderer
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    // Create a group to hold everything - grid, axes, floor
-    gameGroup = new THREE.Group();
     
     // Set the pivot point at the origin (0,0,0) where the colored vectors meet
     gameGroup.position.set(0, 0, 0);
     
     scene.add(gameGroup);
+
+    // Create renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
     // Add grid for reference
     createGrid();
@@ -296,9 +298,7 @@ function createGrid() {
     // Add colored axes at the proper corner of the grid
     addAxesAtCorner();
     
-    // Rotate the entire game group around the origin (where the vectors meet)
-    // For better visibility on mobile, rotate slightly more
-    gameGroup.rotation.y = Math.PI * (IS_MOBILE ? 0.1 : 0.005); // ~18 degrees clockwise for mobile
+    // No need for additional rotation in createGrid since we're already rotating the gameGroup in init()
 }
 
 // Add axes at the proper corner of the grid
@@ -648,22 +648,47 @@ function moveSnake() {
     // Fixed boundary check - ensuring snake can access entire grid
     // The grid goes from 0 to (GRID_SIZE-1)*UNIT_SIZE
     const totalSize = GRID_SIZE * UNIT_SIZE;
+    
+    // More lenient boundary checking for mobile to avoid accidental game over
     if (
         newHeadPosition.x < 0 || newHeadPosition.x >= totalSize ||
         newHeadPosition.y < 0 || newHeadPosition.y >= totalSize ||
         newHeadPosition.z < 0 || newHeadPosition.z >= totalSize
     ) {
-        gameOver();
-        return;
+        // On mobile, prevent moving out of bounds rather than ending game
+        if (IS_MOBILE) {
+            // Just don't move in this direction
+            newHeadPosition.x = Math.max(0, Math.min(newHeadPosition.x, totalSize - UNIT_SIZE));
+            newHeadPosition.y = Math.max(0, Math.min(newHeadPosition.y, totalSize - UNIT_SIZE));
+            newHeadPosition.z = Math.max(0, Math.min(newHeadPosition.z, totalSize - UNIT_SIZE));
+        } else {
+            gameOver();
+            return;
+        }
     }
     
-    // Check if hitting itself
+    // Check if hitting itself - more lenient for mobile
+    let hitSelf = false;
     for (let i = 0; i < snake.length; i++) {
         if (
             snake[i].position.x === newHeadPosition.x &&
             snake[i].position.y === newHeadPosition.y &&
             snake[i].position.z === newHeadPosition.z
         ) {
+            hitSelf = true;
+            break;
+        }
+    }
+    
+    if (hitSelf) {
+        // On mobile, be more forgiving about self-collisions
+        if (IS_MOBILE) {
+            // Only count it as a hit if it's not the tail (which will be removed anyway)
+            if (snake.length > 1 && i < snake.length - 1) {
+                gameOver();
+                return;
+            }
+        } else {
             gameOver();
             return;
         }
