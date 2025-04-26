@@ -141,31 +141,11 @@ function createMobileControls() {
     const upButton = createDirectionButton('↑', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: 1, z: 0 }));
     const downButton = createDirectionButton('↓', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: -1, z: 0 }));
     
-    // Create Z-axis buttons (Blue)
-    const inButton = createDirectionButton('⊙', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: -1 }));
-    const outButton = createDirectionButton('⊗', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: 1 }));
+    // Create Z-axis buttons (Blue) - now with rotated arrow icons
+    const inButton = createDirectionButton('↗', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: -1 }));
+    const outButton = createDirectionButton('↙', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: 1 }));
     
-    // Add axis labels
-    const xLabel = document.createElement('div');
-    xLabel.textContent = 'X Axis';
-    xLabel.style.color = '#FFF';
-    xLabel.style.fontSize = '12px';
-    xLabel.style.marginBottom = '5px';
-    xLabel.style.textAlign = 'center';
-    
-    const yLabel = document.createElement('div');
-    yLabel.textContent = 'Y Axis';
-    yLabel.style.color = '#FFF';
-    yLabel.style.fontSize = '12px';
-    yLabel.style.marginBottom = '5px';
-    yLabel.style.textAlign = 'center';
-    
-    const zLabel = document.createElement('div');
-    zLabel.textContent = 'Z Axis';
-    zLabel.style.color = '#FFF';
-    zLabel.style.fontSize = '12px';
-    zLabel.style.marginBottom = '5px';
-    zLabel.style.textAlign = 'center';
+    // Removed axis labels
     
     // Arrange the buttons
     const buttonContainerX = document.createElement('div');
@@ -186,14 +166,9 @@ function createMobileControls() {
     buttonContainerZ.appendChild(inButton);
     buttonContainerZ.appendChild(outButton);
     
-    // Assemble containers
-    xAxisContainer.appendChild(xLabel);
+    // Assemble containers - without labels
     xAxisContainer.appendChild(buttonContainerX);
-    
-    yAxisContainer.appendChild(yLabel);
     yAxisContainer.appendChild(buttonContainerY);
-    
-    zAxisContainer.appendChild(zLabel);
     zAxisContainer.appendChild(buttonContainerZ);
     
     controlsContainer.appendChild(xAxisContainer);
@@ -351,35 +326,7 @@ function addAxesAtCorner() {
     zArrow.rotation.x = Math.PI / 2;
     gameGroup.add(zArrow);
     
-    // Add small color indicators at the end of each axis
-    if (IS_MOBILE) {
-        // Add small colored spheres at the end of each axis to reinforce colors
-        const sphereSize = 0.7; // Larger for better visibility
-        
-        // X-axis indicator (Red)
-        const xSphere = new THREE.Mesh(
-            new THREE.SphereGeometry(sphereSize, 16, 16),
-            new THREE.MeshBasicMaterial({ color: COLORS.xAxis })
-        );
-        xSphere.position.set(axisLength * 0.7, 0, 0);
-        gameGroup.add(xSphere);
-        
-        // Y-axis indicator (Green)
-        const ySphere = new THREE.Mesh(
-            new THREE.SphereGeometry(sphereSize, 16, 16),
-            new THREE.MeshBasicMaterial({ color: COLORS.yAxis })
-        );
-        ySphere.position.set(0, axisLength * 0.7, 0);
-        gameGroup.add(ySphere);
-        
-        // Z-axis indicator (Blue)
-        const zSphere = new THREE.Mesh(
-            new THREE.SphereGeometry(sphereSize, 16, 16),
-            new THREE.MeshBasicMaterial({ color: COLORS.zAxis })
-        );
-        zSphere.position.set(0, 0, axisLength * 0.7);
-        gameGroup.add(zSphere);
-    }
+    // Removed colored spheres for mobile
 }
 
 // Create initial snake
