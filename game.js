@@ -1,7 +1,7 @@
 // Game constants
 const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const GRID_SIZE = 8; // Keep 8x8x8 grid
-const UNIT_SIZE = IS_MOBILE ? 7.0 : 1.25; // Even larger unit size for mobile
+const UNIT_SIZE = IS_MOBILE ? 12.0 : 1.25; // EXTREMELY large unit size for mobile
 const GRID_UNITS = GRID_SIZE / UNIT_SIZE;
 const MOVE_INTERVAL = 400; // Slowed down from 300ms to 400ms for slower snake movement
 const QUICK_RESPONSE_DELAY = 150; // delay for immediate moves (slower than instant but faster than interval)
@@ -39,6 +39,10 @@ const restartButton = document.getElementById('restartButton');
 
 // Initialize the game
 function init() {
+    // Create scene first
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111111); // subtle dark background
+    
     // Prevent scrolling on mobile
     if (IS_MOBILE) {
         document.body.style.overflow = 'hidden';
@@ -55,46 +59,51 @@ function init() {
             gameOverScreen.style.top = '20%';
             gameOverScreen.style.height = 'auto';
         }
+        
+        // Position score display for mobile
+        if (scoreBoard) {
+            scoreBoard.style.position = 'fixed';
+            scoreBoard.style.top = '5%';
+            scoreBoard.style.left = '0';
+            scoreBoard.style.width = '100%';
+            scoreBoard.style.textAlign = 'center';
+            scoreBoard.style.zIndex = '1500';
+            scoreBoard.style.color = 'white';
+            scoreBoard.style.fontSize = '24px';
+            scoreBoard.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        }
     }
 
-    // Create scene
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111); // subtle dark background
-
-    // Create camera looking at the grid from a rotated position
+    // Create the game group
+    gameGroup = new THREE.Group();
+    scene.add(gameGroup);
+    
+    // Calculate actual physical size of the cube: GRID_SIZE * UNIT_SIZE
+    const totalSize = GRID_SIZE * UNIT_SIZE; // Physical size of the cube
+    
+    // Create camera with extreme wide angle for mobile
     camera = new THREE.PerspectiveCamera(
-        IS_MOBILE ? 95 : 50, // Very wide angle for mobile to fit the large grid
+        IS_MOBILE ? 100 : 50, 
         window.innerWidth / window.innerHeight,
         0.1,
         1000
     );
     
-    // Position camera to see the larger physical cube
-    // Calculate actual physical size of the cube: GRID_SIZE * UNIT_SIZE
-    const totalSize = GRID_SIZE * UNIT_SIZE; // Physical size of the cube
-    
-    // Adjust camera position based on physical size and device
+    // Position camera for optimal grid visibility
     if (IS_MOBILE) {
-        // Position camera for optimal grid visibility on mobile with much larger grid
-        // Move camera further back and higher to ensure the grid fits in view
-        camera.position.set(totalSize * 1.3, totalSize * 2.0, totalSize * 2.3);
+        // Move camera for clear visibility of the extremely large grid
+        camera.position.set(totalSize * 0.8, totalSize * 1.2, totalSize * 1.8);
         
-        // Adjust look at point higher to move the grid up in the viewport
-        camera.lookAt(totalSize * 0.5, totalSize * 0.8, totalSize * 0.5);
+        // Look directly at grid center
+        camera.lookAt(totalSize/2, totalSize/2, totalSize/2);
         
-        // Rotate the grid slightly to see it better
-        gameGroup = new THREE.Group();
-        gameGroup.rotation.y = Math.PI * 0.15; // Rotate slightly to improve visibility
+        // Rotate the game group to see all sides clearly
+        gameGroup.rotation.y = Math.PI * 0.25;
     } else {
+        // Desktop positioning
         camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
         camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
-        gameGroup = new THREE.Group();
     }
-    
-    // Set the pivot point at the origin (0,0,0) where the colored vectors meet
-    gameGroup.position.set(0, 0, 0);
-    
-    scene.add(gameGroup);
 
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -130,13 +139,104 @@ function init() {
     animate();
 }
 
+// Create reference grid
+function createGrid() {
+    // Calculate the physical size of the grid
+    const totalSize = GRID_SIZE * UNIT_SIZE;
+    
+    // Create a box for the grid
+    const gridGeometry = new THREE.BoxGeometry(totalSize, totalSize, totalSize);
+    
+    // Create a more visible grid with thicker lines
+    const gridMaterial = new THREE.LineBasicMaterial({ 
+        color: COLORS.gridLines,
+        transparent: false,
+        linewidth: IS_MOBILE ? 3 : 3 // Thicker lines for mobile
+    });
+    
+    // Create the grid box as a wireframe
+    const gridBox = new THREE.LineSegments(
+        new THREE.EdgesGeometry(gridGeometry),
+        gridMaterial
+    );
+    
+    // Center the grid in the game area
+    gridBox.position.set(totalSize / 2, totalSize / 2, totalSize / 2);
+    
+    // Add the grid to the game group
+    gameGroup.add(gridBox);
+    
+    // Add colored axes for better orientation
+    addAxesAtCorner();
+}
+
+// Add axes at the proper corner of the grid
+function addAxesAtCorner() {
+    const totalSize = GRID_SIZE * UNIT_SIZE;
+    const axisLength = totalSize;
+    const axisWidth = IS_MOBILE ? 5 : 3; // Thicker lines for mobile
+    
+    // Create the X-axis (red, left/right)
+    const xAxisGeo = new THREE.BufferGeometry();
+    xAxisGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+        0, 0, 0,
+        axisLength, 0, 0
+    ], 3));
+    const xAxisMat = new THREE.LineBasicMaterial({ color: COLORS.xAxis, linewidth: axisWidth });
+    const xAxis = new THREE.Line(xAxisGeo, xAxisMat);
+    gameGroup.add(xAxis);
+    
+    // Add red arrow for X-axis - bigger for mobile
+    const xArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 1.0 : 0.3, IS_MOBILE ? 2.0 : 0.6, 12);
+    const xArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.xAxis });
+    const xArrow = new THREE.Mesh(xArrowGeo, xArrowMat);
+    xArrow.position.set(axisLength, 0, 0);
+    xArrow.rotation.z = -Math.PI / 2;
+    gameGroup.add(xArrow);
+    
+    // Create the Y-axis (green, W/S keys)
+    const yAxisGeo = new THREE.BufferGeometry();
+    yAxisGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+        0, 0, 0,
+        0, axisLength, 0
+    ], 3));
+    const yAxisMat = new THREE.LineBasicMaterial({ color: COLORS.yAxis, linewidth: axisWidth });
+    const yAxis = new THREE.Line(yAxisGeo, yAxisMat);
+    gameGroup.add(yAxis);
+    
+    // Add green arrow for Y-axis - bigger for mobile
+    const yArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 1.0 : 0.3, IS_MOBILE ? 2.0 : 0.6, 12);
+    const yArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.yAxis });
+    const yArrow = new THREE.Mesh(yArrowGeo, yArrowMat);
+    yArrow.position.set(0, axisLength, 0);
+    gameGroup.add(yArrow);
+    
+    // Create the Z-axis (blue, up/down arrows)
+    const zAxisGeo = new THREE.BufferGeometry();
+    zAxisGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+        0, 0, 0,
+        0, 0, axisLength
+    ], 3));
+    const zAxisMat = new THREE.LineBasicMaterial({ color: COLORS.zAxis, linewidth: axisWidth });
+    const zAxis = new THREE.Line(zAxisGeo, zAxisMat);
+    gameGroup.add(zAxis);
+    
+    // Add blue arrow for Z-axis - bigger for mobile
+    const zArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 1.0 : 0.3, IS_MOBILE ? 2.0 : 0.6, 12);
+    const zArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.zAxis });
+    const zArrow = new THREE.Mesh(zArrowGeo, zArrowMat);
+    zArrow.position.set(0, 0, axisLength);
+    zArrow.rotation.x = Math.PI / 2;
+    gameGroup.add(zArrow);
+}
+
 // Create mobile control buttons
 function createMobileControls() {
     // Create control container positioned at the bottom
     const controlsContainer = document.createElement('div');
     controlsContainer.id = 'mobile-controls';
     controlsContainer.style.position = 'fixed';
-    controlsContainer.style.bottom = '10px';
+    controlsContainer.style.bottom = '20px';
     controlsContainer.style.left = '0';
     controlsContainer.style.width = '100%';
     controlsContainer.style.zIndex = '1000';
@@ -145,9 +245,9 @@ function createMobileControls() {
     controlsContainer.style.alignItems = 'center';
     
     // Make controls more visible with a slight background
-    controlsContainer.style.backgroundColor = 'rgba(0,0,0,0.2)';
+    controlsContainer.style.backgroundColor = 'rgba(0,0,0,0.4)';
     controlsContainer.style.paddingTop = '5px';
-    controlsContainer.style.paddingBottom = '5px';
+    controlsContainer.style.paddingBottom = '10px';
     
     // Layout in a 3x3 grid as specified:
     // [NA] [Up] [In]
@@ -155,9 +255,9 @@ function createMobileControls() {
     // [Out] [Down] [NA]
     const buttonContainer = document.createElement('div');
     buttonContainer.style.display = 'grid';
-    buttonContainer.style.gridTemplateColumns = 'repeat(3, 60px)';
-    buttonContainer.style.gridTemplateRows = 'repeat(3, 60px)';
-    buttonContainer.style.gap = '3px';
+    buttonContainer.style.gridTemplateColumns = 'repeat(3, 70px)';
+    buttonContainer.style.gridTemplateRows = 'repeat(3, 70px)';
+    buttonContainer.style.gap = '5px';
     
     // Create the buttons
     // Left button (red)
@@ -228,16 +328,16 @@ function createDirectionButton(arrowSymbol, color, clickHandler) {
         return `rgb(${r}, ${g}, ${b})`;
     };
     
-    // Style the button based on reference image
+    // Style the button for better visibility
     button.style.width = '100%';
     button.style.height = '100%';
-    button.style.fontSize = '32px';
-    button.style.borderRadius = '8px';
+    button.style.fontSize = '36px';
+    button.style.borderRadius = '10px';
     button.style.background = hexToRgb(color);
     button.style.color = 'white';
     button.style.fontWeight = 'bold';
     button.style.border = 'none';
-    button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+    button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.5)';
     button.style.outline = 'none';
     button.style.cursor = 'pointer';
     button.style.display = 'flex';
@@ -248,123 +348,20 @@ function createDirectionButton(arrowSymbol, color, clickHandler) {
     // Add active feedback
     button.addEventListener('touchstart', (e) => {
         button.style.transform = 'scale(0.95)';
-        button.style.boxShadow = '0 1px 2px rgba(0,0,0,0.3)';
+        button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.5)';
         e.preventDefault(); // Prevent default to avoid double-tap zooming
+        
+        // Call the handler immediately on touch for more responsive controls
+        clickHandler();
     });
     
     button.addEventListener('touchend', (e) => {
         button.style.transform = 'scale(1)';
-        button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-        clickHandler();
+        button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.5)';
         e.preventDefault(); // Prevent default behavior
     });
     
     return button;
-}
-
-// Create reference grid
-function createGrid() {
-    // Create a box that exactly matches the game boundaries
-    // Using totalSize to ensure the grid's physical size matches our game world
-    const totalSize = GRID_SIZE * UNIT_SIZE;
-    const gridGeometry = new THREE.BoxGeometry(totalSize, totalSize, totalSize);
-    
-    // Create a more visible grid with thicker lines
-    const gridMaterial = new THREE.LineBasicMaterial({ 
-        color: COLORS.gridLines,
-        transparent: false,
-        linewidth: IS_MOBILE ? 2 : 3 // Slightly thinner lines on mobile for cleaner appearance
-    });
-    
-    // Create the grid box as a wireframe
-    const gridBox = new THREE.LineSegments(
-        new THREE.EdgesGeometry(gridGeometry),
-        gridMaterial
-    );
-    
-    // Position the grid at the center of the game area
-    gridBox.position.set(totalSize / 2, totalSize / 2, totalSize / 2);
-    
-    // Add the grid to the game group
-    gameGroup.add(gridBox);
-    
-    // Add a floor grid for better orientation - simple gray grid, no colors
-    const floorGridSize = totalSize;
-    const floorGridDivisions = GRID_SIZE;
-    const floorGrid = new THREE.GridHelper(floorGridSize, floorGridDivisions, 0x444444, 0x444444);
-    floorGrid.position.set(totalSize / 2, 0, totalSize / 2);
-    gameGroup.add(floorGrid);
-    
-    // Add colored axes at the proper corner of the grid
-    addAxesAtCorner();
-    
-    // No need for additional rotation in createGrid since we're already rotating the gameGroup in init()
-}
-
-// Add axes at the proper corner of the grid
-function addAxesAtCorner() {
-    const totalSize = GRID_SIZE * UNIT_SIZE;
-    const axisLength = totalSize;
-    const axisWidth = IS_MOBILE ? 4 : 3; // Thicker lines for mobile
-    
-    // Position axes at the (0,0,0) corner of the grid
-    // Since the grid is centered at (totalSize/2, totalSize/2, totalSize/2)
-    // We need to place the axes at (0, 0, 0) for proper alignment
-    
-    // Create the X-axis (red, left/right)
-    const xAxisGeo = new THREE.BufferGeometry();
-    xAxisGeo.setAttribute('position', new THREE.Float32BufferAttribute([
-        0, 0, 0,
-        axisLength, 0, 0
-    ], 3));
-    const xAxisMat = new THREE.LineBasicMaterial({ color: COLORS.xAxis, linewidth: axisWidth });
-    const xAxis = new THREE.Line(xAxisGeo, xAxisMat);
-    gameGroup.add(xAxis);
-    
-    // Add red arrow for X-axis - bigger for mobile
-    const xArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.6 : 0.3, IS_MOBILE ? 1.2 : 0.6, 12);
-    const xArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.xAxis });
-    const xArrow = new THREE.Mesh(xArrowGeo, xArrowMat);
-    xArrow.position.set(axisLength, 0, 0);
-    xArrow.rotation.z = -Math.PI / 2;
-    gameGroup.add(xArrow);
-    
-    // Create the Y-axis (green, W/S keys)
-    const yAxisGeo = new THREE.BufferGeometry();
-    yAxisGeo.setAttribute('position', new THREE.Float32BufferAttribute([
-        0, 0, 0,
-        0, axisLength, 0
-    ], 3));
-    const yAxisMat = new THREE.LineBasicMaterial({ color: COLORS.yAxis, linewidth: axisWidth });
-    const yAxis = new THREE.Line(yAxisGeo, yAxisMat);
-    gameGroup.add(yAxis);
-    
-    // Add green arrow for Y-axis - bigger for mobile
-    const yArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.6 : 0.3, IS_MOBILE ? 1.2 : 0.6, 12);
-    const yArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.yAxis });
-    const yArrow = new THREE.Mesh(yArrowGeo, yArrowMat);
-    yArrow.position.set(0, axisLength, 0);
-    gameGroup.add(yArrow);
-    
-    // Create the Z-axis (blue, up/down arrows)
-    const zAxisGeo = new THREE.BufferGeometry();
-    zAxisGeo.setAttribute('position', new THREE.Float32BufferAttribute([
-        0, 0, 0,
-        0, 0, axisLength
-    ], 3));
-    const zAxisMat = new THREE.LineBasicMaterial({ color: COLORS.zAxis, linewidth: axisWidth });
-    const zAxis = new THREE.Line(zAxisGeo, zAxisMat);
-    gameGroup.add(zAxis);
-    
-    // Add blue arrow for Z-axis - bigger for mobile
-    const zArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.6 : 0.3, IS_MOBILE ? 1.2 : 0.6, 12);
-    const zArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.zAxis });
-    const zArrow = new THREE.Mesh(zArrowGeo, zArrowMat);
-    zArrow.position.set(0, 0, axisLength);
-    zArrow.rotation.x = Math.PI / 2;
-    gameGroup.add(zArrow);
-    
-    // Removed colored spheres for mobile
 }
 
 // Create initial snake
@@ -668,27 +665,17 @@ function moveSnake() {
     }
     
     // Check if hitting itself - more lenient for mobile
-    let hitSelf = false;
     for (let i = 0; i < snake.length; i++) {
         if (
             snake[i].position.x === newHeadPosition.x &&
             snake[i].position.y === newHeadPosition.y &&
             snake[i].position.z === newHeadPosition.z
         ) {
-            hitSelf = true;
-            break;
-        }
-    }
-    
-    if (hitSelf) {
-        // On mobile, be more forgiving about self-collisions
-        if (IS_MOBILE) {
-            // Only count it as a hit if it's not the tail (which will be removed anyway)
-            if (snake.length > 1 && i < snake.length - 1) {
-                gameOver();
-                return;
+            // On mobile, only count it as a hit if it's not the tail
+            if (IS_MOBILE && i === snake.length - 1 && !isEating) {
+                // Ignore collision with tail that would be removed
+                continue;
             }
-        } else {
             gameOver();
             return;
         }
