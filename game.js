@@ -1,7 +1,7 @@
 // Game constants
 const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const GRID_SIZE = 8; // Keep 8x8x8 grid
-const UNIT_SIZE = IS_MOBILE ? 10.0 : 1.25; // Consistent scale between mobile and desktop
+const UNIT_SIZE = IS_MOBILE ? 10.0 : 1.25; // Larger for mobile
 const GRID_UNITS = GRID_SIZE / UNIT_SIZE;
 const MOVE_INTERVAL = 400; // Slowed down from 300ms to 400ms for slower snake movement
 const QUICK_RESPONSE_DELAY = 150; // delay for immediate moves (slower than instant but faster than interval)
@@ -39,12 +39,20 @@ const restartButton = document.getElementById('restartButton');
 
 // Initialize the game
 function init() {
-    // Create scene first
+    // Create scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111111); // subtle dark background
     
-    // Prevent scrolling on mobile
+    // Create the game group early so we can manipulate it
+    gameGroup = new THREE.Group();
+    scene.add(gameGroup);
+    
+    // Calculate total size
+    const totalSize = GRID_SIZE * UNIT_SIZE;
+    
+    // Setup for mobile specifically
     if (IS_MOBILE) {
+        // Mobile-specific body styling
         document.body.style.overflow = 'hidden';
         document.body.style.position = 'fixed';
         document.body.style.width = '100%';
@@ -52,15 +60,40 @@ function init() {
         document.body.style.margin = '0';
         document.body.style.padding = '0';
         
-        // Ensure game over screen is positioned properly on mobile
+        // Calculate screen aspect ratio to position game better
+        const aspectRatio = window.innerWidth / window.innerHeight;
+        
+        // Create camera for mobile - optimized for vertical layout
+        camera = new THREE.PerspectiveCamera(70, aspectRatio, 0.1, 1000);
+        
+        // On mobile, use a top-down perspective with slight angle
+        // This makes the 3D nature visible but keeps it simple to understand
+        camera.position.set(totalSize * 0.6, totalSize * 2.5, totalSize * 0.6);
+        camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
+        
+        // Rotate grid for optimal mobile viewing
+        gameGroup.rotation.y = Math.PI / 4; // 45 degrees for equal visibility of sides
+        
+        // Position game over screen for mobile
         if (gameOverScreen) {
-            gameOverScreen.style.zIndex = '2000'; // Higher than controls
+            gameOverScreen.style.zIndex = '2000';
             gameOverScreen.style.position = 'fixed';
-            gameOverScreen.style.top = '30%';
+            gameOverScreen.style.top = '25%';
             gameOverScreen.style.height = 'auto';
+            
+            // Make restart button more mobile-friendly
+            if (restartButton) {
+                restartButton.style.padding = '15px 30px';
+                restartButton.style.fontSize = '20px';
+                restartButton.style.borderRadius = '10px';
+                restartButton.style.backgroundColor = '#4CAF50';
+                restartButton.style.color = 'white';
+                restartButton.style.border = 'none';
+                restartButton.style.marginTop = '20px';
+            }
         }
         
-        // Position score display for mobile
+        // Style score board for mobile
         if (scoreBoard) {
             scoreBoard.style.position = 'fixed';
             scoreBoard.style.top = '5%';
@@ -69,42 +102,25 @@ function init() {
             scoreBoard.style.textAlign = 'center';
             scoreBoard.style.zIndex = '1500';
             scoreBoard.style.color = 'white';
-            scoreBoard.style.fontSize = '24px';
-            scoreBoard.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+            scoreBoard.style.fontSize = '28px';
+            scoreBoard.style.fontWeight = 'bold';
+            scoreBoard.style.textShadow = '2px 2px 4px rgba(0,0,0,0.7)';
         }
-    }
-
-    // Create the game group
-    gameGroup = new THREE.Group();
-    scene.add(gameGroup);
-    
-    // Calculate actual physical size of the cube: GRID_SIZE * UNIT_SIZE
-    const totalSize = GRID_SIZE * UNIT_SIZE; // Physical size of the cube
-    
-    // Create camera with a consistent approach for desktop and mobile
-    camera = new THREE.PerspectiveCamera(
-        IS_MOBILE ? 60 : 50, // Similar field of view on both platforms
-        window.innerWidth / window.innerHeight,
-        0.1,
-        1000
-    );
-    
-    // Position camera for the same view on mobile and desktop
-    if (IS_MOBILE) {
-        // Use the same relative camera position as desktop, just scaled up
-        camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
-        
-        // Look at the center of the grid
-        camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
-        
-        // Use same rotation as desktop for consistency
-        gameGroup.rotation.y = Math.PI * 0.005; // Same slight rotation as desktop
     } else {
-        // Desktop positioning
+        // DESKTOP VERSION - KEEP EXACTLY THE SAME
+        // Create desktop camera
+        camera = new THREE.PerspectiveCamera(
+            50,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+        
+        // Use original desktop positioning
         camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
         camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
         
-        // Apply the standard slight rotation
+        // Apply the standard slight rotation for desktop
         gameGroup.rotation.y = Math.PI * 0.005;
     }
 
@@ -125,9 +141,12 @@ function init() {
     // Add event listeners
     window.addEventListener('keydown', handleKeyPress);
     window.addEventListener('resize', handleResize);
-    restartButton.addEventListener('click', restartGame);
     
-    // Add mobile controls
+    if (restartButton) {
+        restartButton.addEventListener('click', restartGame);
+    }
+    
+    // Add mobile controls or desktop touch listeners
     if (IS_MOBILE) {
         createMobileControls();
     } else {
@@ -154,7 +173,7 @@ function createGrid() {
     const gridMaterial = new THREE.LineBasicMaterial({ 
         color: COLORS.gridLines,
         transparent: false,
-        linewidth: IS_MOBILE ? 3 : 3 // Consistent line width
+        linewidth: IS_MOBILE ? 3 : 3
     });
     
     // Create the grid box as a wireframe
@@ -184,7 +203,7 @@ function createGrid() {
 function addAxesAtCorner() {
     const totalSize = GRID_SIZE * UNIT_SIZE;
     const axisLength = totalSize;
-    const axisWidth = IS_MOBILE ? 4 : 3; // Slightly thicker on mobile
+    const axisWidth = IS_MOBILE ? 4 : 3;
     
     // Create the X-axis (red, left/right)
     const xAxisGeo = new THREE.BufferGeometry();
@@ -196,7 +215,7 @@ function addAxesAtCorner() {
     const xAxis = new THREE.Line(xAxisGeo, xAxisMat);
     gameGroup.add(xAxis);
     
-    // Add red arrow for X-axis - scaled appropriately for mobile
+    // Add red arrow for X-axis
     const xArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.8 : 0.3, IS_MOBILE ? 1.6 : 0.6, 12);
     const xArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.xAxis });
     const xArrow = new THREE.Mesh(xArrowGeo, xArrowMat);
@@ -214,7 +233,7 @@ function addAxesAtCorner() {
     const yAxis = new THREE.Line(yAxisGeo, yAxisMat);
     gameGroup.add(yAxis);
     
-    // Add green arrow for Y-axis - scaled appropriately for mobile
+    // Add green arrow for Y-axis
     const yArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.8 : 0.3, IS_MOBILE ? 1.6 : 0.6, 12);
     const yArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.yAxis });
     const yArrow = new THREE.Mesh(yArrowGeo, yArrowMat);
@@ -231,64 +250,87 @@ function addAxesAtCorner() {
     const zAxis = new THREE.Line(zAxisGeo, zAxisMat);
     gameGroup.add(zAxis);
     
-    // Add blue arrow for Z-axis - scaled appropriately for mobile
+    // Add blue arrow for Z-axis
     const zArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.8 : 0.3, IS_MOBILE ? 1.6 : 0.6, 12);
     const zArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.zAxis });
     const zArrow = new THREE.Mesh(zArrowGeo, zArrowMat);
     zArrow.position.set(0, 0, axisLength);
     zArrow.rotation.x = Math.PI / 2;
     gameGroup.add(zArrow);
+    
+    // Add axis labels for mobile to make it crystal clear
+    if (IS_MOBILE) {
+        addAxisLabel('X', axisLength + 2, 0, 0, COLORS.xAxis);
+        addAxisLabel('Y', 0, axisLength + 2, 0, COLORS.yAxis);
+        addAxisLabel('Z', 0, 0, axisLength + 2, COLORS.zAxis);
+    }
+}
+
+// Helper to add 3D text labels to axes
+function addAxisLabel(text, x, y, z, color) {
+    const loader = new THREE.FontLoader();
+    
+    // Use a dummy font first so we don't block
+    const textGeo = new THREE.TextGeometry(text, {
+        size: 2,
+        height: 0.2,
+    });
+    
+    const textMaterial = new THREE.MeshBasicMaterial({ color: color });
+    const textMesh = new THREE.Mesh(textGeo, textMaterial);
+    textMesh.position.set(x, y, z);
+    gameGroup.add(textMesh);
 }
 
 // Create mobile control buttons
 function createMobileControls() {
-    // Create control container positioned at the bottom
+    // Create main container
     const controlsContainer = document.createElement('div');
     controlsContainer.id = 'mobile-controls';
     controlsContainer.style.position = 'fixed';
-    controlsContainer.style.bottom = '20px';
+    controlsContainer.style.bottom = '10px';
     controlsContainer.style.left = '0';
     controlsContainer.style.width = '100%';
     controlsContainer.style.zIndex = '1000';
     controlsContainer.style.display = 'flex';
-    controlsContainer.style.justifyContent = 'center';
+    controlsContainer.style.flexDirection = 'column';
     controlsContainer.style.alignItems = 'center';
+    controlsContainer.style.padding = '10px';
     
-    // Make controls more visible with a slight background
-    controlsContainer.style.backgroundColor = 'rgba(0,0,0,0.4)';
-    controlsContainer.style.paddingTop = '5px';
-    controlsContainer.style.paddingBottom = '10px';
+    // Create a directional pad container
+    const dpadContainer = document.createElement('div');
+    dpadContainer.style.display = 'grid';
+    dpadContainer.style.gridTemplateColumns = 'repeat(3, 65px)';
+    dpadContainer.style.gridTemplateRows = 'repeat(3, 65px)';
+    dpadContainer.style.gap = '5px';
+    dpadContainer.style.marginBottom = '10px';
     
-    // Layout in a 3x3 grid as specified:
-    // [NA] [Up] [In]
-    // [Left] [NA] [Right]
-    // [Out] [Down] [NA]
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.display = 'grid';
-    buttonContainer.style.gridTemplateColumns = 'repeat(3, 70px)';
-    buttonContainer.style.gridTemplateRows = 'repeat(3, 70px)';
-    buttonContainer.style.gap = '5px';
+    // Add labels to each axis
+    const axisLabels = document.createElement('div');
+    axisLabels.style.display = 'flex';
+    axisLabels.style.justifyContent = 'space-around';
+    axisLabels.style.width = '100%';
+    axisLabels.style.marginBottom = '10px';
     
-    // Create the buttons
-    // Left button (red)
-    const leftButton = createDirectionButton('←', COLORS.xAxis, () => queueDirectionChange({ x: -1, y: 0, z: 0 }));
+    // Create axis labels
+    const redLabel = createAxisLabel('X-Axis (Red)', COLORS.xAxis);
+    const greenLabel = createAxisLabel('Y-Axis (Green)', COLORS.yAxis);
+    const blueLabel = createAxisLabel('Z-Axis (Blue)', COLORS.zAxis);
     
-    // Right button (red)
-    const rightButton = createDirectionButton('→', COLORS.xAxis, () => queueDirectionChange({ x: 1, y: 0, z: 0 }));
+    // Add labels to container
+    axisLabels.appendChild(redLabel);
+    axisLabels.appendChild(greenLabel);
+    axisLabels.appendChild(blueLabel);
     
-    // Up button (green)
-    const upButton = createDirectionButton('↑', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: 1, z: 0 }));
+    // Create the buttons with full direction labels
+    const upButton = createDirectionButton('↑ Y+', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: 1, z: 0 }));
+    const downButton = createDirectionButton('↓ Y-', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: -1, z: 0 }));
+    const leftButton = createDirectionButton('← X-', COLORS.xAxis, () => queueDirectionChange({ x: -1, y: 0, z: 0 }));
+    const rightButton = createDirectionButton('→ X+', COLORS.xAxis, () => queueDirectionChange({ x: 1, y: 0, z: 0 }));
+    const inButton = createDirectionButton('↗ Z-', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: -1 }));
+    const outButton = createDirectionButton('↙ Z+', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: 1 }));
     
-    // Down button (green)
-    const downButton = createDirectionButton('↓', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: -1, z: 0 }));
-    
-    // In button (blue - forward/z-axis negative)
-    const inButton = createDirectionButton('↗', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: -1 }));
-    
-    // Out button (blue - backward/z-axis positive)
-    const outButton = createDirectionButton('↙', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: 1 }));
-    
-    // Position buttons in a 3x3 grid with empty spaces
+    // Position buttons in clear 3x3 layout
     // Top row
     upButton.style.gridColumn = '2';
     upButton.style.gridRow = '1';
@@ -299,6 +341,14 @@ function createMobileControls() {
     // Middle row
     leftButton.style.gridColumn = '1';
     leftButton.style.gridRow = '2';
+    
+    // Center button - empty or could be a pause button
+    const centerButton = document.createElement('div');
+    centerButton.style.gridColumn = '2';
+    centerButton.style.gridRow = '2';
+    centerButton.style.display = 'flex';
+    centerButton.style.justifyContent = 'center';
+    centerButton.style.alignItems = 'center';
     
     rightButton.style.gridColumn = '3';
     rightButton.style.gridRow = '2';
@@ -311,18 +361,44 @@ function createMobileControls() {
     downButton.style.gridRow = '3';
     
     // Add buttons to container
-    buttonContainer.appendChild(upButton);
-    buttonContainer.appendChild(inButton);
-    buttonContainer.appendChild(leftButton);
-    buttonContainer.appendChild(rightButton);
-    buttonContainer.appendChild(outButton);
-    buttonContainer.appendChild(downButton);
+    dpadContainer.appendChild(upButton);
+    dpadContainer.appendChild(inButton);
+    dpadContainer.appendChild(leftButton);
+    dpadContainer.appendChild(centerButton);
+    dpadContainer.appendChild(rightButton);
+    dpadContainer.appendChild(outButton);
+    dpadContainer.appendChild(downButton);
     
-    // Add container to controls
-    controlsContainer.appendChild(buttonContainer);
+    // Add elements to main container
+    controlsContainer.appendChild(axisLabels);
+    controlsContainer.appendChild(dpadContainer);
     
     // Add to document
     document.body.appendChild(controlsContainer);
+}
+
+// Create axis label for mobile
+function createAxisLabel(text, color) {
+    const label = document.createElement('div');
+    
+    // Convert hex color to RGB
+    const hexToRgb = hex => {
+        const r = (hex >> 16) & 255;
+        const g = (hex >> 8) & 255;
+        const b = hex & 255;
+        return `rgb(${r}, ${g}, ${b})`;
+    };
+    
+    label.style.color = hexToRgb(color);
+    label.style.fontWeight = 'bold';
+    label.style.fontSize = '16px';
+    label.style.padding = '5px 10px';
+    label.style.backgroundColor = 'rgba(0,0,0,0.4)';
+    label.style.borderRadius = '4px';
+    label.style.textShadow = '1px 1px 2px rgba(0,0,0,0.7)';
+    label.textContent = text;
+    
+    return label;
 }
 
 // Helper function to create direction buttons
@@ -341,11 +417,11 @@ function createDirectionButton(arrowSymbol, color, clickHandler) {
     // Style the button for better visibility
     button.style.width = '100%';
     button.style.height = '100%';
-    button.style.fontSize = '36px';
+    button.style.fontSize = '18px';
+    button.style.fontWeight = 'bold';
     button.style.borderRadius = '10px';
     button.style.background = hexToRgb(color);
     button.style.color = 'white';
-    button.style.fontWeight = 'bold';
     button.style.border = 'none';
     button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.5)';
     button.style.outline = 'none';
