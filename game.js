@@ -1,7 +1,7 @@
 // Game constants
 const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const GRID_SIZE = 8; // Keep 8x8x8 grid
-const UNIT_SIZE = IS_MOBILE ? 3.0 : 1.25; // Much larger unit size for mobile
+const UNIT_SIZE = IS_MOBILE ? 5.0 : 1.25; // Dramatically increased unit size for mobile
 const GRID_UNITS = GRID_SIZE / UNIT_SIZE;
 const MOVE_INTERVAL = 400; // Slowed down from 300ms to 400ms for slower snake movement
 const QUICK_RESPONSE_DELAY = 150; // delay for immediate moves (slower than instant but faster than interval)
@@ -47,6 +47,14 @@ function init() {
         document.body.style.height = '100%';
         document.body.style.margin = '0';
         document.body.style.padding = '0';
+        
+        // Ensure game over screen is positioned properly on mobile
+        if (gameOverScreen) {
+            gameOverScreen.style.zIndex = '2000'; // Higher than controls
+            gameOverScreen.style.position = 'fixed';
+            gameOverScreen.style.top = '20%';
+            gameOverScreen.style.height = 'auto';
+        }
     }
 
     // Create scene
@@ -55,7 +63,7 @@ function init() {
 
     // Create camera looking at the grid from a rotated position
     camera = new THREE.PerspectiveCamera(
-        IS_MOBILE ? 80 : 50, // Even wider field of view on mobile for better visibility
+        IS_MOBILE ? 90 : 50, // Extreme wide angle for mobile to see the large grid
         window.innerWidth / window.innerHeight,
         0.1,
         1000
@@ -67,12 +75,12 @@ function init() {
     
     // Adjust camera position based on physical size and device
     if (IS_MOBILE) {
-        // Position camera for optimal grid visibility on mobile
-        // Move camera up and back to ensure the grid fills most of the screen
-        camera.position.set(totalSize * 1.5, totalSize * 2.5, totalSize * 2.5);
+        // Position camera for optimal grid visibility on mobile with much larger grid
+        // Move camera far back to ensure the grid fits in view
+        camera.position.set(totalSize * 1.2, totalSize * 1.8, totalSize * 2.0);
         
-        // Adjust look at point slightly higher to center the grid higher in viewport
-        camera.lookAt(totalSize * 0.5, totalSize * 0.6, totalSize * 0.5);
+        // Adjust look at point to center the grid
+        camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
     } else {
         camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
         camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
@@ -126,7 +134,7 @@ function createMobileControls() {
     const controlsContainer = document.createElement('div');
     controlsContainer.id = 'mobile-controls';
     controlsContainer.style.position = 'fixed';
-    controlsContainer.style.bottom = '15px'; // Slightly higher for more room
+    controlsContainer.style.bottom = '10px';
     controlsContainer.style.left = '0';
     controlsContainer.style.width = '100%';
     controlsContainer.style.zIndex = '1000';
@@ -145,8 +153,8 @@ function createMobileControls() {
     // [Out] [Down] [NA]
     const buttonContainer = document.createElement('div');
     buttonContainer.style.display = 'grid';
-    buttonContainer.style.gridTemplateColumns = 'repeat(3, 65px)';
-    buttonContainer.style.gridTemplateRows = 'repeat(3, 65px)';
+    buttonContainer.style.gridTemplateColumns = 'repeat(3, 60px)';
+    buttonContainer.style.gridTemplateRows = 'repeat(3, 60px)';
     buttonContainer.style.gap = '3px';
     
     // Create the buttons
@@ -702,6 +710,13 @@ function gameOver() {
     isGameOver = true;
     clearInterval(moveTimer);
     finalScore.textContent = `Your score: ${score}`;
+    
+    // Position the game over screen properly
+    if (IS_MOBILE) {
+        gameOverScreen.style.top = '20%';
+        gameOverScreen.style.zIndex = '2000';
+    }
+    
     gameOverScreen.style.display = 'flex';
 }
 
