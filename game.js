@@ -1,7 +1,7 @@
 // Game constants
 const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const GRID_SIZE = 8; // Keep 8x8x8 grid
-const UNIT_SIZE = IS_MOBILE ? 12.0 : 1.25; // EXTREMELY large unit size for mobile
+const UNIT_SIZE = IS_MOBILE ? 10.0 : 1.25; // Consistent scale between mobile and desktop
 const GRID_UNITS = GRID_SIZE / UNIT_SIZE;
 const MOVE_INTERVAL = 400; // Slowed down from 300ms to 400ms for slower snake movement
 const QUICK_RESPONSE_DELAY = 150; // delay for immediate moves (slower than instant but faster than interval)
@@ -56,7 +56,7 @@ function init() {
         if (gameOverScreen) {
             gameOverScreen.style.zIndex = '2000'; // Higher than controls
             gameOverScreen.style.position = 'fixed';
-            gameOverScreen.style.top = '20%';
+            gameOverScreen.style.top = '30%';
             gameOverScreen.style.height = 'auto';
         }
         
@@ -81,28 +81,31 @@ function init() {
     // Calculate actual physical size of the cube: GRID_SIZE * UNIT_SIZE
     const totalSize = GRID_SIZE * UNIT_SIZE; // Physical size of the cube
     
-    // Create camera with extreme wide angle for mobile
+    // Create camera with a consistent approach for desktop and mobile
     camera = new THREE.PerspectiveCamera(
-        IS_MOBILE ? 100 : 50, 
+        IS_MOBILE ? 60 : 50, // Similar field of view on both platforms
         window.innerWidth / window.innerHeight,
         0.1,
         1000
     );
     
-    // Position camera for optimal grid visibility
+    // Position camera for the same view on mobile and desktop
     if (IS_MOBILE) {
-        // Move camera for clear visibility of the extremely large grid
-        camera.position.set(totalSize * 0.8, totalSize * 1.2, totalSize * 1.8);
+        // Use the same relative camera position as desktop, just scaled up
+        camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
         
-        // Look directly at grid center
-        camera.lookAt(totalSize/2, totalSize/2, totalSize/2);
+        // Look at the center of the grid
+        camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
         
-        // Rotate the game group to see all sides clearly
-        gameGroup.rotation.y = Math.PI * 0.25;
+        // Use same rotation as desktop for consistency
+        gameGroup.rotation.y = Math.PI * 0.005; // Same slight rotation as desktop
     } else {
         // Desktop positioning
         camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
         camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
+        
+        // Apply the standard slight rotation
+        gameGroup.rotation.y = Math.PI * 0.005;
     }
 
     // Create renderer
@@ -151,7 +154,7 @@ function createGrid() {
     const gridMaterial = new THREE.LineBasicMaterial({ 
         color: COLORS.gridLines,
         transparent: false,
-        linewidth: IS_MOBILE ? 3 : 3 // Thicker lines for mobile
+        linewidth: IS_MOBILE ? 3 : 3 // Consistent line width
     });
     
     // Create the grid box as a wireframe
@@ -166,6 +169,13 @@ function createGrid() {
     // Add the grid to the game group
     gameGroup.add(gridBox);
     
+    // Add a floor grid for better orientation - simple gray grid, no colors
+    const floorGridSize = totalSize;
+    const floorGridDivisions = GRID_SIZE;
+    const floorGrid = new THREE.GridHelper(floorGridSize, floorGridDivisions, 0x444444, 0x444444);
+    floorGrid.position.set(totalSize / 2, 0, totalSize / 2);
+    gameGroup.add(floorGrid);
+    
     // Add colored axes for better orientation
     addAxesAtCorner();
 }
@@ -174,7 +184,7 @@ function createGrid() {
 function addAxesAtCorner() {
     const totalSize = GRID_SIZE * UNIT_SIZE;
     const axisLength = totalSize;
-    const axisWidth = IS_MOBILE ? 5 : 3; // Thicker lines for mobile
+    const axisWidth = IS_MOBILE ? 4 : 3; // Slightly thicker on mobile
     
     // Create the X-axis (red, left/right)
     const xAxisGeo = new THREE.BufferGeometry();
@@ -186,8 +196,8 @@ function addAxesAtCorner() {
     const xAxis = new THREE.Line(xAxisGeo, xAxisMat);
     gameGroup.add(xAxis);
     
-    // Add red arrow for X-axis - bigger for mobile
-    const xArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 1.0 : 0.3, IS_MOBILE ? 2.0 : 0.6, 12);
+    // Add red arrow for X-axis - scaled appropriately for mobile
+    const xArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.8 : 0.3, IS_MOBILE ? 1.6 : 0.6, 12);
     const xArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.xAxis });
     const xArrow = new THREE.Mesh(xArrowGeo, xArrowMat);
     xArrow.position.set(axisLength, 0, 0);
@@ -204,8 +214,8 @@ function addAxesAtCorner() {
     const yAxis = new THREE.Line(yAxisGeo, yAxisMat);
     gameGroup.add(yAxis);
     
-    // Add green arrow for Y-axis - bigger for mobile
-    const yArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 1.0 : 0.3, IS_MOBILE ? 2.0 : 0.6, 12);
+    // Add green arrow for Y-axis - scaled appropriately for mobile
+    const yArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.8 : 0.3, IS_MOBILE ? 1.6 : 0.6, 12);
     const yArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.yAxis });
     const yArrow = new THREE.Mesh(yArrowGeo, yArrowMat);
     yArrow.position.set(0, axisLength, 0);
@@ -221,8 +231,8 @@ function addAxesAtCorner() {
     const zAxis = new THREE.Line(zAxisGeo, zAxisMat);
     gameGroup.add(zAxis);
     
-    // Add blue arrow for Z-axis - bigger for mobile
-    const zArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 1.0 : 0.3, IS_MOBILE ? 2.0 : 0.6, 12);
+    // Add blue arrow for Z-axis - scaled appropriately for mobile
+    const zArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.8 : 0.3, IS_MOBILE ? 1.6 : 0.6, 12);
     const zArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.zAxis });
     const zArrow = new THREE.Mesh(zArrowGeo, zArrowMat);
     zArrow.position.set(0, 0, axisLength);
