@@ -1,7 +1,7 @@
 // Game constants
 const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const GRID_SIZE = 8; // Keep 8x8x8 grid
-const UNIT_SIZE = IS_MOBILE ? 0.8 : 1.25; // Even smaller unit size on mobile
+const UNIT_SIZE = IS_MOBILE ? 1.0 : 1.25; // Increased unit size on mobile for bigger grid
 const GRID_UNITS = GRID_SIZE / UNIT_SIZE;
 const MOVE_INTERVAL = 400; // Slowed down from 300ms to 400ms for slower snake movement
 const QUICK_RESPONSE_DELAY = 150; // delay for immediate moves (slower than instant but faster than interval)
@@ -91,14 +91,14 @@ function init() {
     window.addEventListener('resize', handleResize);
     restartButton.addEventListener('click', restartGame);
     
-    // Add touch event listeners for mobile
-    renderer.domElement.addEventListener('touchstart', handleTouchStart, false);
-    renderer.domElement.addEventListener('touchmove', handleTouchMove, false);
-    renderer.domElement.addEventListener('touchend', handleTouchEnd, false);
-
-    // Show mobile instructions if on mobile
+    // Add mobile controls
     if (IS_MOBILE) {
-        showMobileInstructions();
+        createMobileControls();
+    } else {
+        // Only add touch event listeners for non-mobile devices
+        renderer.domElement.addEventListener('touchstart', handleTouchStart, false);
+        renderer.domElement.addEventListener('touchmove', handleTouchMove, false);
+        renderer.domElement.addEventListener('touchend', handleTouchEnd, false);
     }
 
     // Start game loop
@@ -106,34 +106,145 @@ function init() {
     animate();
 }
 
-// Show mobile instructions
-function showMobileInstructions() {
-    // Create instructions element
-    const instructionsDiv = document.createElement('div');
-    instructionsDiv.id = 'mobile-instructions';
-    instructionsDiv.style.position = 'fixed';
-    instructionsDiv.style.top = '10px';
-    instructionsDiv.style.right = '10px';
-    instructionsDiv.style.backgroundColor = 'rgba(0,0,0,0.7)';
-    instructionsDiv.style.color = 'white';
-    instructionsDiv.style.padding = '10px';
-    instructionsDiv.style.borderRadius = '5px';
-    instructionsDiv.style.fontSize = '14px';
-    instructionsDiv.style.maxWidth = '220px';
-    instructionsDiv.style.zIndex = '1000';
-    instructionsDiv.innerHTML = `
-        <div style="margin-bottom:8px">Swipe Controls:</div>
-        <div style="margin-bottom:5px"><span style="color:red">Red Axis</span>: Horizontal swipe</div>
-        <div style="margin-bottom:5px"><span style="color:lime">Green Axis</span>: Vertical swipe</div>
-        <div style="margin-bottom:5px"><span style="color:dodgerblue">Blue Axis</span>: Diagonal swipe</div>
-        <button id="close-instructions" style="background:#444;border:none;color:white;padding:5px 10px;margin-top:5px;border-radius:3px;">Got it!</button>
-    `;
-    document.body.appendChild(instructionsDiv);
+// Create mobile control buttons
+function createMobileControls() {
+    // Create container for all buttons
+    const controlsContainer = document.createElement('div');
+    controlsContainer.id = 'mobile-controls';
+    controlsContainer.style.position = 'fixed';
+    controlsContainer.style.bottom = '20px';
+    controlsContainer.style.left = '0';
+    controlsContainer.style.width = '100%';
+    controlsContainer.style.display = 'flex';
+    controlsContainer.style.justifyContent = 'center';
+    controlsContainer.style.gap = '10px';
+    controlsContainer.style.zIndex = '1000';
     
-    // Add event listener to close button
-    document.getElementById('close-instructions').addEventListener('click', function() {
-        instructionsDiv.style.display = 'none';
+    // Create axis containers
+    const xAxisContainer = document.createElement('div');
+    const yAxisContainer = document.createElement('div');
+    const zAxisContainer = document.createElement('div');
+    
+    [xAxisContainer, yAxisContainer, zAxisContainer].forEach(container => {
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.alignItems = 'center';
+        container.style.marginRight = '15px';
+        container.style.marginLeft = '15px';
     });
+    
+    // Create X-axis buttons (Red)
+    const leftButton = createDirectionButton('←', COLORS.xAxis, () => queueDirectionChange({ x: -1, y: 0, z: 0 }));
+    const rightButton = createDirectionButton('→', COLORS.xAxis, () => queueDirectionChange({ x: 1, y: 0, z: 0 }));
+    
+    // Create Y-axis buttons (Green)
+    const upButton = createDirectionButton('↑', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: 1, z: 0 }));
+    const downButton = createDirectionButton('↓', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: -1, z: 0 }));
+    
+    // Create Z-axis buttons (Blue)
+    const inButton = createDirectionButton('⊙', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: -1 }));
+    const outButton = createDirectionButton('⊗', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: 1 }));
+    
+    // Add axis labels
+    const xLabel = document.createElement('div');
+    xLabel.textContent = 'X Axis';
+    xLabel.style.color = '#FFF';
+    xLabel.style.fontSize = '12px';
+    xLabel.style.marginBottom = '5px';
+    xLabel.style.textAlign = 'center';
+    
+    const yLabel = document.createElement('div');
+    yLabel.textContent = 'Y Axis';
+    yLabel.style.color = '#FFF';
+    yLabel.style.fontSize = '12px';
+    yLabel.style.marginBottom = '5px';
+    yLabel.style.textAlign = 'center';
+    
+    const zLabel = document.createElement('div');
+    zLabel.textContent = 'Z Axis';
+    zLabel.style.color = '#FFF';
+    zLabel.style.fontSize = '12px';
+    zLabel.style.marginBottom = '5px';
+    zLabel.style.textAlign = 'center';
+    
+    // Arrange the buttons
+    const buttonContainerX = document.createElement('div');
+    buttonContainerX.style.display = 'flex';
+    buttonContainerX.style.gap = '5px';
+    buttonContainerX.appendChild(leftButton);
+    buttonContainerX.appendChild(rightButton);
+    
+    const buttonContainerY = document.createElement('div');
+    buttonContainerY.style.display = 'flex';
+    buttonContainerY.style.gap = '5px';
+    buttonContainerY.appendChild(upButton);
+    buttonContainerY.appendChild(downButton);
+    
+    const buttonContainerZ = document.createElement('div');
+    buttonContainerZ.style.display = 'flex';
+    buttonContainerZ.style.gap = '5px';
+    buttonContainerZ.appendChild(inButton);
+    buttonContainerZ.appendChild(outButton);
+    
+    // Assemble containers
+    xAxisContainer.appendChild(xLabel);
+    xAxisContainer.appendChild(buttonContainerX);
+    
+    yAxisContainer.appendChild(yLabel);
+    yAxisContainer.appendChild(buttonContainerY);
+    
+    zAxisContainer.appendChild(zLabel);
+    zAxisContainer.appendChild(buttonContainerZ);
+    
+    controlsContainer.appendChild(xAxisContainer);
+    controlsContainer.appendChild(yAxisContainer);
+    controlsContainer.appendChild(zAxisContainer);
+    
+    document.body.appendChild(controlsContainer);
+}
+
+// Helper function to create direction buttons
+function createDirectionButton(arrowSymbol, color, clickHandler) {
+    const button = document.createElement('button');
+    button.innerHTML = arrowSymbol;
+    
+    // Convert hex color to RGB
+    const hexToRgb = hex => {
+        const r = (hex >> 16) & 255;
+        const g = (hex >> 8) & 255;
+        const b = hex & 255;
+        return `rgb(${r}, ${g}, ${b})`;
+    };
+    
+    // Style the button
+    button.style.width = '50px';
+    button.style.height = '50px';
+    button.style.fontSize = '24px';
+    button.style.borderRadius = '10px';
+    button.style.background = hexToRgb(color);
+    button.style.color = 'white';
+    button.style.fontWeight = 'bold';
+    button.style.border = 'none';
+    button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+    button.style.outline = 'none';
+    button.style.cursor = 'pointer';
+    button.style.display = 'flex';
+    button.style.justifyContent = 'center';
+    button.style.alignItems = 'center';
+    
+    // Add active feedback
+    button.addEventListener('touchstart', () => {
+        button.style.transform = 'scale(0.95)';
+        button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+    });
+    
+    button.addEventListener('touchend', () => {
+        button.style.transform = 'scale(1)';
+        button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+        clickHandler();
+    });
+    
+    return button;
 }
 
 // Create reference grid
@@ -198,7 +309,7 @@ function addAxesAtCorner() {
     gameGroup.add(xAxis);
     
     // Add red arrow for X-axis - bigger for mobile
-    const xArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.5 : 0.3, IS_MOBILE ? 1.0 : 0.6, 12);
+    const xArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.6 : 0.3, IS_MOBILE ? 1.2 : 0.6, 12);
     const xArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.xAxis });
     const xArrow = new THREE.Mesh(xArrowGeo, xArrowMat);
     xArrow.position.set(axisLength, 0, 0);
@@ -216,7 +327,7 @@ function addAxesAtCorner() {
     gameGroup.add(yAxis);
     
     // Add green arrow for Y-axis - bigger for mobile
-    const yArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.5 : 0.3, IS_MOBILE ? 1.0 : 0.6, 12);
+    const yArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.6 : 0.3, IS_MOBILE ? 1.2 : 0.6, 12);
     const yArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.yAxis });
     const yArrow = new THREE.Mesh(yArrowGeo, yArrowMat);
     yArrow.position.set(0, axisLength, 0);
@@ -233,7 +344,7 @@ function addAxesAtCorner() {
     gameGroup.add(zAxis);
     
     // Add blue arrow for Z-axis - bigger for mobile
-    const zArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.5 : 0.3, IS_MOBILE ? 1.0 : 0.6, 12);
+    const zArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.6 : 0.3, IS_MOBILE ? 1.2 : 0.6, 12);
     const zArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.zAxis });
     const zArrow = new THREE.Mesh(zArrowGeo, zArrowMat);
     zArrow.position.set(0, 0, axisLength);
@@ -243,7 +354,7 @@ function addAxesAtCorner() {
     // Add small color indicators at the end of each axis
     if (IS_MOBILE) {
         // Add small colored spheres at the end of each axis to reinforce colors
-        const sphereSize = 0.5; // Larger for better visibility
+        const sphereSize = 0.7; // Larger for better visibility
         
         // X-axis indicator (Red)
         const xSphere = new THREE.Mesh(
@@ -350,7 +461,7 @@ function createFood() {
     gameGroup.add(foodMesh);
 }
 
-// Handle touch start
+// Handle touch start (for non-mobile devices)
 function handleTouchStart(event) {
     if (isGameOver) return;
     
@@ -368,13 +479,13 @@ function handleTouchStart(event) {
     event.preventDefault();
 }
 
-// Handle touch move (for potential future use)
+// Handle touch move (for non-mobile devices)
 function handleTouchMove(event) {
     // Prevent default to avoid scrolling
     event.preventDefault();
 }
 
-// Handle touch end
+// Handle touch end (for non-mobile devices)
 function handleTouchEnd(event) {
     if (isGameOver) return;
     
@@ -404,9 +515,6 @@ function handleTouchEnd(event) {
         (Math.abs(deltaX) < minSwipeDistance && Math.abs(deltaY) < minSwipeDistance)) {
         return;
     }
-    
-    // Show visual feedback for swipe direction
-    showSwipeFeedback(touchEndX, touchEndY);
     
     // Determine primary swipe direction
     if (Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
@@ -439,35 +547,6 @@ function handleTouchEnd(event) {
             queueDirectionChange({ x: 0, y: 0, z: 1 });
         }
     }
-}
-
-// Show visual feedback for swipe
-function showSwipeFeedback(x, y) {
-    // Create a temporary visual indicator for the swipe
-    const indicator = document.createElement('div');
-    indicator.style.position = 'fixed';
-    indicator.style.width = '40px';
-    indicator.style.height = '40px';
-    indicator.style.borderRadius = '50%';
-    indicator.style.backgroundColor = 'rgba(255, 255, 255, 0.3)';
-    indicator.style.left = (x - 20) + 'px';
-    indicator.style.top = (y - 20) + 'px';
-    indicator.style.transform = 'scale(0)';
-    indicator.style.transition = 'transform 0.3s, opacity 0.3s';
-    indicator.style.pointerEvents = 'none';
-    indicator.style.zIndex = '1000';
-    document.body.appendChild(indicator);
-    
-    // Animate the indicator
-    setTimeout(() => {
-        indicator.style.transform = 'scale(3)';
-        indicator.style.opacity = '0';
-    }, 10);
-    
-    // Remove the indicator after animation
-    setTimeout(() => {
-        document.body.removeChild(indicator);
-    }, 300);
 }
 
 // Queue a direction change - used by both keyboard and touch
