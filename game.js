@@ -113,19 +113,18 @@ function createMobileControls() {
     const controlsContainer = document.createElement('div');
     controlsContainer.id = 'mobile-controls';
     controlsContainer.style.position = 'fixed';
-    controlsContainer.style.bottom = '50px';
+    controlsContainer.style.bottom = '10px'; // Move closer to bottom
     controlsContainer.style.left = '0';
     controlsContainer.style.width = '100%';
     controlsContainer.style.zIndex = '1000';
     
-    // Create a grid layout for the buttons
+    // Create a more compact grid layout for the buttons
     const buttonGrid = document.createElement('div');
     buttonGrid.style.display = 'grid';
     buttonGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
     buttonGrid.style.gridTemplateRows = 'repeat(2, 1fr)';
-    buttonGrid.style.gap = '10px';
-    buttonGrid.style.width = '80%';
-    buttonGrid.style.maxWidth = '350px';
+    buttonGrid.style.gap = '5px'; // Reduced gap between buttons
+    buttonGrid.style.width = '250px'; // Fixed, more compact width
     buttonGrid.style.margin = '0 auto';
     
     // Create buttons with same styling as in the reference image
@@ -187,32 +186,33 @@ function createDirectionButton(arrowSymbol, color, clickHandler) {
         return `rgb(${r}, ${g}, ${b})`;
     };
     
-    // Style the button to match the reference image
+    // Style the button to match the reference image - more compact
     button.style.width = '100%';
-    button.style.height = '65px';
-    button.style.fontSize = '30px';
+    button.style.height = '55px'; // Reduced height
+    button.style.fontSize = '28px';
     button.style.borderRadius = '8px';
     button.style.background = hexToRgb(color);
     button.style.color = 'white';
     button.style.fontWeight = 'bold';
     button.style.border = 'none';
-    button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+    button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'; // Smaller shadow
     button.style.outline = 'none';
     button.style.cursor = 'pointer';
     button.style.display = 'flex';
     button.style.justifyContent = 'center';
     button.style.alignItems = 'center';
+    button.style.padding = '0'; // Remove padding
     
     // Add active feedback
     button.addEventListener('touchstart', (e) => {
         button.style.transform = 'scale(0.95)';
-        button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+        button.style.boxShadow = '0 1px 2px rgba(0,0,0,0.3)';
         e.preventDefault(); // Prevent default to avoid double-tap zooming
     });
     
     button.addEventListener('touchend', (e) => {
         button.style.transform = 'scale(1)';
-        button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
+        button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
         clickHandler();
         e.preventDefault(); // Prevent default behavior
     });
