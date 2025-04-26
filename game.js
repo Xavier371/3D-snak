@@ -1,7 +1,7 @@
 // Game constants
 const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const GRID_SIZE = 8; // Keep 8x8x8 grid
-const UNIT_SIZE = IS_MOBILE ? 1.5 : 1.25; // Increased unit size by 50% on mobile
+const UNIT_SIZE = IS_MOBILE ? 2.0 : 1.25; // Significantly larger unit size for mobile
 const GRID_UNITS = GRID_SIZE / UNIT_SIZE;
 const MOVE_INTERVAL = 400; // Slowed down from 300ms to 400ms for slower snake movement
 const QUICK_RESPONSE_DELAY = 150; // delay for immediate moves (slower than instant but faster than interval)
@@ -39,13 +39,23 @@ const restartButton = document.getElementById('restartButton');
 
 // Initialize the game
 function init() {
+    // Prevent scrolling on mobile
+    if (IS_MOBILE) {
+        document.body.style.overflow = 'hidden';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+        document.body.style.height = '100%';
+        document.body.style.margin = '0';
+        document.body.style.padding = '0';
+    }
+
     // Create scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111111); // subtle dark background
 
     // Create camera looking at the grid from a rotated position
     camera = new THREE.PerspectiveCamera(
-        IS_MOBILE ? 70 : 50, // Increased field of view on mobile even more for better visibility
+        IS_MOBILE ? 75 : 50, // Even wider field of view on mobile for better visibility
         window.innerWidth / window.innerHeight,
         0.1,
         1000
@@ -57,9 +67,8 @@ function init() {
     
     // Adjust camera position based on physical size and device
     if (IS_MOBILE) {
-        // Position farther back on mobile so the whole grid is visible
-        // Move the camera even higher to match the screenshot reference
-        camera.position.set(totalSize * 1.8, totalSize * 3.0, totalSize * 2.8);
+        // Position camera for optimal grid visibility on mobile
+        camera.position.set(totalSize * 1.8, totalSize * 3.5, totalSize * 2.8);
     } else {
         camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
     }
@@ -109,67 +118,80 @@ function init() {
 
 // Create mobile control buttons
 function createMobileControls() {
-    // Create control container that will be positioned at the bottom
+    // Create control container positioned at the bottom
     const controlsContainer = document.createElement('div');
     controlsContainer.id = 'mobile-controls';
     controlsContainer.style.position = 'fixed';
-    controlsContainer.style.bottom = '10px'; // Move closer to bottom
+    controlsContainer.style.bottom = '10px';
     controlsContainer.style.left = '0';
     controlsContainer.style.width = '100%';
     controlsContainer.style.zIndex = '1000';
+    controlsContainer.style.display = 'flex';
+    controlsContainer.style.justifyContent = 'center';
+    controlsContainer.style.alignItems = 'center';
     
-    // Create a more compact grid layout for the buttons
-    const buttonGrid = document.createElement('div');
-    buttonGrid.style.display = 'grid';
-    buttonGrid.style.gridTemplateColumns = 'repeat(3, 1fr)';
-    buttonGrid.style.gridTemplateRows = 'repeat(2, 1fr)';
-    buttonGrid.style.gap = '5px'; // Reduced gap between buttons
-    buttonGrid.style.width = '250px'; // Fixed, more compact width
-    buttonGrid.style.margin = '0 auto';
+    // Layout similar to the reference image
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.display = 'grid';
+    buttonContainer.style.gridTemplateColumns = 'repeat(3, 70px)';
+    buttonContainer.style.gridTemplateRows = 'repeat(2, 70px)';
+    buttonContainer.style.gap = '2px';
     
-    // Create buttons with same styling as in the reference image
+    // Create the buttons
     // Left button (red)
     const leftButton = createDirectionButton('←', COLORS.xAxis, () => queueDirectionChange({ x: -1, y: 0, z: 0 }));
-    leftButton.style.gridColumn = '1';
-    leftButton.style.gridRow = '1';
     
     // Right button (red)
     const rightButton = createDirectionButton('→', COLORS.xAxis, () => queueDirectionChange({ x: 1, y: 0, z: 0 }));
-    rightButton.style.gridColumn = '2';
-    rightButton.style.gridRow = '1';
     
     // Up button (green)
     const upButton = createDirectionButton('↑', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: 1, z: 0 }));
-    upButton.style.gridColumn = '1';
-    upButton.style.gridRow = '2';
     
     // Down button (green)
     const downButton = createDirectionButton('↓', COLORS.yAxis, () => queueDirectionChange({ x: 0, y: -1, z: 0 }));
-    downButton.style.gridColumn = '2';
-    downButton.style.gridRow = '2';
     
     // In button (blue - forward/z-axis negative)
     const inButton = createDirectionButton('↗', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: -1 }));
-    inButton.style.gridColumn = '3';
-    inButton.style.gridRow = '1';
     
     // Out button (blue - backward/z-axis positive)
     const outButton = createDirectionButton('↙', COLORS.zAxis, () => queueDirectionChange({ x: 0, y: 0, z: 1 }));
-    outButton.style.gridColumn = '3';
+    
+    // Position buttons in a cross layout with blue buttons in corners
+    // Per your reference image:
+    // Layout:
+    // [Left] [Up] [In]
+    // [Out] [Down] [Right]
+    
+    leftButton.style.gridColumn = '1';
+    leftButton.style.gridRow = '1';
+    
+    upButton.style.gridColumn = '2';
+    upButton.style.gridRow = '1';
+    
+    inButton.style.gridColumn = '3';
+    inButton.style.gridRow = '1';
+    
+    outButton.style.gridColumn = '1';
     outButton.style.gridRow = '2';
     
-    // Add buttons to the grid
-    buttonGrid.appendChild(leftButton);
-    buttonGrid.appendChild(rightButton);
-    buttonGrid.appendChild(upButton);
-    buttonGrid.appendChild(downButton);
-    buttonGrid.appendChild(inButton);
-    buttonGrid.appendChild(outButton);
+    downButton.style.gridColumn = '2';
+    downButton.style.gridRow = '2';
     
-    // Add the button grid to the main container
-    controlsContainer.appendChild(buttonGrid);
+    rightButton.style.gridColumn = '3';
+    rightButton.style.gridRow = '2';
     
-    // Add container to the document
+    // Add buttons to container
+    buttonContainer.appendChild(leftButton);
+    buttonContainer.appendChild(upButton);
+    buttonContainer.appendChild(inButton);
+    buttonContainer.appendChild(outButton);
+    buttonContainer.appendChild(downButton);
+    buttonContainer.appendChild(rightButton);
+    
+    // Add container to controls
+    controlsContainer.appendChild(buttonContainer);
+    
+    // Add to document
     document.body.appendChild(controlsContainer);
 }
 
@@ -186,22 +208,22 @@ function createDirectionButton(arrowSymbol, color, clickHandler) {
         return `rgb(${r}, ${g}, ${b})`;
     };
     
-    // Style the button to match the reference image - more compact
+    // Style the button based on reference image
     button.style.width = '100%';
-    button.style.height = '55px'; // Reduced height
-    button.style.fontSize = '28px';
+    button.style.height = '100%';
+    button.style.fontSize = '32px';
     button.style.borderRadius = '8px';
     button.style.background = hexToRgb(color);
     button.style.color = 'white';
     button.style.fontWeight = 'bold';
     button.style.border = 'none';
-    button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'; // Smaller shadow
+    button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
     button.style.outline = 'none';
     button.style.cursor = 'pointer';
     button.style.display = 'flex';
     button.style.justifyContent = 'center';
     button.style.alignItems = 'center';
-    button.style.padding = '0'; // Remove padding
+    button.style.padding = '0';
     
     // Add active feedback
     button.addEventListener('touchstart', (e) => {
