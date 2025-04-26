@@ -3,7 +3,7 @@ const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini
 const GRID_SIZE = 8; // Back to 8x8x8 grid
 const UNIT_SIZE = 1.25; // Increased unit size to make the whole cube physically larger
 const GRID_UNITS = GRID_SIZE / UNIT_SIZE;
-const MOVE_INTERVAL = 300; // slowed down from 200 to 300ms
+const MOVE_INTERVAL = 400; // Slowed down from 300ms to 400ms for slower snake movement
 const QUICK_RESPONSE_DELAY = 150; // delay for immediate moves (slower than instant but faster than interval)
 const COLORS = {
     snake: 0x00ff00, // bright green
@@ -28,6 +28,8 @@ let moveTimer;
 let gameGroup;
 let lastMoveTime = 0; // Track the last time the snake moved
 let touchStartX, touchStartY, touchStartTime;
+let lastSwipeTime = 0; // Track last swipe time to prevent too rapid swipes
+const MIN_SWIPE_INTERVAL = 100; // Minimum time between swipes (ms)
 
 // DOM elements
 const scoreBoard = document.getElementById('scoreBoard');
@@ -251,6 +253,8 @@ function createFood() {
     let foodX, foodY, foodZ;
     
     while (!validPosition) {
+        // Generate position using the same grid cells the snake can move through
+        // Using 0 to GRID_SIZE-1 ensures we're in valid grid cells
         foodX = Math.floor(Math.random() * GRID_SIZE) * UNIT_SIZE;
         foodY = Math.floor(Math.random() * GRID_SIZE) * UNIT_SIZE;
         foodZ = Math.floor(Math.random() * GRID_SIZE) * UNIT_SIZE;
@@ -309,14 +313,20 @@ function handleTouchEnd(event) {
     const touchEndY = touch.clientY;
     const touchEndTime = Date.now();
     
+    // Check if we should process this swipe (not too soon after last one)
+    if (touchEndTime - lastSwipeTime < MIN_SWIPE_INTERVAL) {
+        return;
+    }
+    
     // Calculate swipe distance and time
     const deltaX = touchEndX - touchStartX;
     const deltaY = touchEndY - touchStartY;
     const deltaTime = touchEndTime - touchStartTime;
     
     // Minimum swipe distance and maximum time for a swipe to be recognized
-    const minSwipeDistance = 30;
-    const maxSwipeTime = 300;
+    // Reduced min distance to make swipes easier to register
+    const minSwipeDistance = 20; 
+    const maxSwipeTime = 400; // Increased time window to recognize swipes
     
     // Check if the touch was quick enough to be a swipe
     if (deltaTime <= maxSwipeTime) {
@@ -324,52 +334,64 @@ function handleTouchEnd(event) {
         const absX = Math.abs(deltaX);
         const absY = Math.abs(deltaY);
         
-        // If horizontal swipe is stronger
-        if (absX > absY && absX > minSwipeDistance) {
-            if (deltaX > 0) {
+        let swipeProcessed = false;
+        
+        // SIMPLIFIED SWIPE LOGIC:
+        
+        // If it's more of a horizontal swipe
+        if (absX > absY) {
+            if (deltaX > minSwipeDistance) {
                 // Right swipe - X axis positive
-                queueDirectionChange({ x: 1, y: 0, z: 0 });
-            } else {
+                swipeProcessed = queueDirectionChange({ x: 1, y: 0, z: 0 });
+            } else if (deltaX < -minSwipeDistance) {
                 // Left swipe - X axis negative
-                queueDirectionChange({ x: -1, y: 0, z: 0 });
+                swipeProcessed = queueDirectionChange({ x: -1, y: 0, z: 0 });
             }
         } 
-        // If vertical swipe is stronger
-        else if (absY > absX && absY > minSwipeDistance) {
-            // For vertical swipes, we need to determine if it's Y or Z axis
-            // Using double tap or different swipe patterns
+        // If it's more of a vertical swipe
+        else if (absY > absX) {
+            // For Y-axis (up/down in game world, not screen)
+            if (deltaY < -minSwipeDistance) {
+                // Upward swipe - Y axis positive  
+                swipeProcessed = queueDirectionChange({ x: 0, y: 1, z: 0 });
+            } else if (deltaY > minSwipeDistance) {
+                // Downward swipe - Y axis negative
+                swipeProcessed = queueDirectionChange({ x: 0, y: -1, z: 0 });
+            }
             
-            // Check if it's a nearly vertical swipe (more vertical than horizontal)
-            if (absX < absY * 0.3) {
-                // Very vertical swipe - treat as Z axis
-                if (deltaY > 0) {
-                    // Down swipe - Z axis positive
-                    queueDirectionChange({ x: 0, y: 0, z: 1 });
-                } else {
-                    // Up swipe - Z axis negative
-                    queueDirectionChange({ x: 0, y: 0, z: -1 });
-                }
-            } else {
-                // Diagonal swipe - treat as Y axis
-                if (deltaY > 0) {
-                    // Down swipe - Y axis negative
-                    queueDirectionChange({ x: 0, y: -1, z: 0 });
-                } else {
-                    // Up swipe - Y axis positive
-                    queueDirectionChange({ x: 0, y: 1, z: 0 });
+            // If Y-axis direction didn't work (might be blocked), try Z-axis
+            // This helps with the common issue of trying to go "up" in 3D space
+            if (!swipeProcessed) {
+                if (deltaY < -minSwipeDistance) {
+                    // Upward swipe - Try Z axis negative as alternative
+                    swipeProcessed = queueDirectionChange({ x: 0, y: 0, z: -1 });
+                } else if (deltaY > minSwipeDistance) {
+                    // Downward swipe - Try Z axis positive as alternative
+                    swipeProcessed = queueDirectionChange({ x: 0, y: 0, z: 1 });
                 }
             }
+        }
+        
+        // If a swipe was processed, update the last swipe time
+        if (swipeProcessed) {
+            lastSwipeTime = touchEndTime;
         }
     }
 }
 
+// Z-axis swipe handler - dedicated double-tap or two-finger swipe function
+function handleZAxisSwipe(direction) {
+    queueDirectionChange({ x: 0, y: 0, z: direction });
+}
+
 // Queue a direction change - used by both keyboard and touch
+// Returns true if direction was queued, false if it was invalid
 function queueDirectionChange(newDirection) {
     // First validate this is a legal move (can't reverse direction)
     if ((direction.x !== 0 && newDirection.x === -direction.x) || 
         (direction.y !== 0 && newDirection.y === -direction.y) || 
         (direction.z !== 0 && newDirection.z === -direction.z)) {
-        return; // Can't go directly backwards
+        return false; // Can't go directly backwards
     }
     
     // Check if this direction is different from the last queued direction
@@ -388,10 +410,14 @@ function queueDirectionChange(newDirection) {
         if (directionQueue.length === 1) {
             nextDirection = directionQueue[0];
         }
+        
+        return true; // Direction change was queued
     }
+    
+    return false; // No change (already going this direction)
 }
 
-// Handle key presses for snake direction
+// Handle key presses for snake direction - improved for responsiveness
 function handleKeyPress(event) {
     // Prevent default action
     event.preventDefault();
@@ -470,11 +496,13 @@ function moveSnake() {
         z: head.position.z + direction.z * UNIT_SIZE
     };
     
-    // Check if out of bounds - must be exactly aligned with grid
+    // Fixed boundary check - ensuring snake can access entire grid
+    // The grid goes from 0 to (GRID_SIZE-1)*UNIT_SIZE
+    const totalSize = GRID_SIZE * UNIT_SIZE;
     if (
-        newHeadPosition.x < 0 || newHeadPosition.x >= GRID_SIZE * UNIT_SIZE ||
-        newHeadPosition.y < 0 || newHeadPosition.y >= GRID_SIZE * UNIT_SIZE ||
-        newHeadPosition.z < 0 || newHeadPosition.z >= GRID_SIZE * UNIT_SIZE
+        newHeadPosition.x < 0 || newHeadPosition.x >= totalSize ||
+        newHeadPosition.y < 0 || newHeadPosition.y >= totalSize ||
+        newHeadPosition.z < 0 || newHeadPosition.z >= totalSize
     ) {
         gameOver();
         return;
