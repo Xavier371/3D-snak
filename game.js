@@ -59,6 +59,9 @@ function init() {
             gameOverScreen.style.top = '20%';
             gameOverScreen.style.height = 'auto';
         }
+    } else {
+        // Desktop-only instructions
+        addInstructions();
     }
 
     // Create game group
@@ -115,6 +118,32 @@ function init() {
     // Start game loop
     moveTimer = setInterval(moveSnake, MOVE_INTERVAL);
     animate();
+}
+
+// Add instructions for desktop only
+function addInstructions() {
+    const instructions = document.createElement('div');
+    instructions.id = 'desktop-instructions';
+    instructions.style.position = 'fixed';
+    instructions.style.top = '10px';
+    instructions.style.left = '0';
+    instructions.style.width = '100%';
+    instructions.style.textAlign = 'center';
+    instructions.style.color = 'white';
+    instructions.style.fontSize = '16px';
+    instructions.style.fontFamily = 'Arial, sans-serif';
+    instructions.style.zIndex = '1000';
+    instructions.style.padding = '5px';
+    instructions.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    instructions.style.borderRadius = '4px';
+    instructions.style.pointerEvents = 'none'; // Don't block mouse events
+    
+    // Clear instructions
+    instructions.innerHTML = '<span style="color:#ff0000;">X-axis:</span> Left/Right Arrows &nbsp;|&nbsp; '
+        + '<span style="color:#00ff00;">Z-axis:</span> W/S Keys &nbsp;|&nbsp; '
+        + '<span style="color:#0088ff;">Y-axis:</span> Up/Down Arrows';
+    
+    document.body.appendChild(instructions);
 }
 
 // Create reference grid
@@ -610,16 +639,17 @@ function moveSnake() {
     // Fixed boundary check - ensuring snake can access entire grid
     // The grid goes from 0 to (GRID_SIZE-1)*UNIT_SIZE
     const totalSize = GRID_SIZE * UNIT_SIZE;
+    const maxPos = totalSize - (UNIT_SIZE / 2); // Add a small buffer for mobile
     
-    // More lenient boundary checking for mobile to avoid accidental game over
+    // More tolerant boundary checking for mobile
     if (
-        newHeadPosition.x < 0 || newHeadPosition.x >= totalSize ||
-        newHeadPosition.y < 0 || newHeadPosition.y >= totalSize ||
-        newHeadPosition.z < 0 || newHeadPosition.z >= totalSize
+        newHeadPosition.x < -UNIT_SIZE/4 || newHeadPosition.x > maxPos ||
+        newHeadPosition.y < -UNIT_SIZE/4 || newHeadPosition.y > maxPos ||
+        newHeadPosition.z < -UNIT_SIZE/4 || newHeadPosition.z > maxPos
     ) {
-        // On mobile, prevent moving out of bounds rather than ending game
+        // On mobile, be more forgiving with boundary checks
         if (IS_MOBILE) {
-            // Just don't move in this direction
+            // Clamp position to valid range
             newHeadPosition.x = Math.max(0, Math.min(newHeadPosition.x, totalSize - UNIT_SIZE));
             newHeadPosition.y = Math.max(0, Math.min(newHeadPosition.y, totalSize - UNIT_SIZE));
             newHeadPosition.z = Math.max(0, Math.min(newHeadPosition.z, totalSize - UNIT_SIZE));
@@ -629,29 +659,63 @@ function moveSnake() {
         }
     }
     
-    // Check if hitting itself - more lenient for mobile
-    for (let i = 0; i < snake.length; i++) {
-        if (
-            snake[i].position.x === newHeadPosition.x &&
-            snake[i].position.y === newHeadPosition.y &&
-            snake[i].position.z === newHeadPosition.z
-        ) {
-            // On mobile, only count it as a hit if it's not the tail
-            if (IS_MOBILE && i === snake.length - 1 && !isEating) {
-                // Ignore collision with tail that would be removed
-                continue;
+    // Check if hitting itself
+    let hitSelf = false;
+    
+    // Don't check collision with tail since it will be removed
+    for (let i = 0; i < snake.length - 1; i++) {
+        // Use a slightly more forgiving collision check for mobile
+        if (IS_MOBILE) {
+            // Check with a small tolerance
+            const distance = Math.sqrt(
+                Math.pow(snake[i].position.x - newHeadPosition.x, 2) +
+                Math.pow(snake[i].position.y - newHeadPosition.y, 2) +
+                Math.pow(snake[i].position.z - newHeadPosition.z, 2)
+            );
+            
+            // If very close to a body segment (excluding tail)
+            if (distance < UNIT_SIZE * 0.7) {
+                hitSelf = true;
+                break;
             }
-            gameOver();
-            return;
+        } else {
+            // Desktop uses exact collision
+            if (
+                snake[i].position.x === newHeadPosition.x &&
+                snake[i].position.y === newHeadPosition.y &&
+                snake[i].position.z === newHeadPosition.z
+            ) {
+                hitSelf = true;
+                break;
+            }
         }
     }
     
-    // Check if eating food
-    const isEating = (
-        newHeadPosition.x === food.position.x &&
-        newHeadPosition.y === food.position.y &&
-        newHeadPosition.z === food.position.z
-    );
+    if (hitSelf) {
+        gameOver();
+        return;
+    }
+    
+    // Check if eating food - use a more tolerant check for mobile
+    let isEating = false;
+    
+    if (IS_MOBILE) {
+        // Use distance-based check for mobile to be more forgiving
+        const distanceToFood = Math.sqrt(
+            Math.pow(food.position.x - newHeadPosition.x, 2) +
+            Math.pow(food.position.y - newHeadPosition.y, 2) +
+            Math.pow(food.position.z - newHeadPosition.z, 2)
+        );
+        
+        isEating = distanceToFood < UNIT_SIZE * 0.8;
+    } else {
+        // Desktop uses exact collision
+        isEating = (
+            newHeadPosition.x === food.position.x &&
+            newHeadPosition.y === food.position.y &&
+            newHeadPosition.z === food.position.z
+        );
+    }
     
     // Create new head
     const snakeGeometry = new THREE.BoxGeometry(UNIT_SIZE * 0.9, UNIT_SIZE * 0.9, UNIT_SIZE * 0.9);
