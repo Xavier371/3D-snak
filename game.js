@@ -1,7 +1,7 @@
 // Game constants
 const IS_MOBILE = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const GRID_SIZE = 8; // Keep 8x8x8 grid
-const UNIT_SIZE = IS_MOBILE ? 7.2 : 1.25; // 10% smaller for mobile (down from 8.0)
+const UNIT_SIZE = IS_MOBILE ? 5.5 : 0.95; // Reduced size for smaller grid cube
 const GRID_UNITS = GRID_SIZE / UNIT_SIZE;
 const MOVE_INTERVAL = 400; // Slowed down from 300ms to 400ms for slower snake movement
 const QUICK_RESPONSE_DELAY = 150; // delay for immediate moves (slower than instant but faster than interval)
@@ -30,6 +30,18 @@ let lastMoveTime = 0; // Track the last time the snake moved
 let touchStartX, touchStartY, touchStartTime;
 let lastSwipeTime = 0; // Track last swipe time to prevent too rapid swipes
 const MIN_SWIPE_INTERVAL = 100; // Minimum time between swipes (ms)
+// Mobile pinch-to-zoom variables
+let pinchStartDistance = 0;
+let currentScale = 1.0;
+const MIN_SCALE = 0.7;
+const MAX_SCALE = 1.5;
+// Mobile rotation variables
+let rotationStartAngle = 0;
+let currentRotationY = Math.PI * 0.005; // Initial rotation
+let isSingleTouch = false;
+let lastTouchX = 0;
+// Two finger tracking for simultaneous rotation and scaling
+let lastCenterX = 0;
 
 // DOM elements
 const scoreBoard = document.getElementById('scoreBoard');
@@ -42,6 +54,22 @@ function init() {
     // Create scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111111); // subtle dark background
+    
+    // Load saved rotation and scale from localStorage for mobile
+    if (IS_MOBILE) {
+        try {
+            const savedSettings = localStorage.getItem('snake3dSettings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                currentRotationY = settings.rotation || Math.PI * 0.005;
+                currentScale = settings.scale || 1.0;
+            }
+        } catch (e) {
+            // If error loading settings, use defaults
+            currentRotationY = Math.PI * 0.005;
+            currentScale = 1.0;
+        }
+    }
     
     // Prevent scrolling on mobile
     if (IS_MOBILE) {
@@ -71,21 +99,32 @@ function init() {
     // Calculate total size
     const totalSize = GRID_SIZE * UNIT_SIZE;
     
-    // Create camera - IDENTICAL to desktop for both mobile and desktop
+    // Create camera with adjusted position for mobile
     camera = new THREE.PerspectiveCamera(
-        50, // SAME field of view for both platforms
+        IS_MOBILE ? 60 : 50, // Wider field of view on mobile
         window.innerWidth / window.innerHeight,
         0.1,
         1000
     );
     
-    // EXACT SAME camera position for both platforms, just scaled
-    camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
+    // Adjust camera position based on device
+    if (IS_MOBILE) {
+        // Move camera back further on mobile to show entire grid
+        camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
+        // Apply the saved rotation
+        gameGroup.rotation.y = currentRotationY;
+        // Apply the saved scale
+        gameGroup.scale.set(currentScale, currentScale, currentScale);
+    } else {
+        // Desktop camera position
+        camera.position.set(totalSize * 1.0, totalSize * 1.0, totalSize * 2.0);
+        // Apply exact same slight rotation
+        gameGroup.rotation.y = Math.PI * 0.005;
+    }
+    
+    // Look at center of grid
     camera.lookAt(totalSize * 0.5, totalSize * 0.5, totalSize * 0.5);
     
-    // Apply exact same slight rotation
-    gameGroup.rotation.y = Math.PI * 0.005;
-
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -108,6 +147,11 @@ function init() {
     // Add mobile controls or desktop touch listeners
     if (IS_MOBILE) {
         createMobileControls();
+        
+        // Add pinch-to-zoom event listeners for mobile
+        renderer.domElement.addEventListener('touchstart', handleTouchStart, false);
+        renderer.domElement.addEventListener('touchmove', handleTouchMove, false);
+        renderer.domElement.addEventListener('touchend', handleTouchEnd, false);
     } else {
         // Only add touch event listeners for non-mobile devices
         renderer.domElement.addEventListener('touchstart', handleTouchStart, false);
@@ -188,7 +232,7 @@ function createGrid() {
 function addAxesAtCorner() {
     const totalSize = GRID_SIZE * UNIT_SIZE;
     const axisLength = totalSize;
-    const axisWidth = 3;
+    const axisWidth = IS_MOBILE ? 7 : 3; // Even thicker lines for mobile
     
     // Create the X-axis (red, left/right)
     const xAxisGeo = new THREE.BufferGeometry();
@@ -200,8 +244,8 @@ function addAxesAtCorner() {
     const xAxis = new THREE.Line(xAxisGeo, xAxisMat);
     gameGroup.add(xAxis);
     
-    // Add red arrow for X-axis
-    const xArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.5 : 0.3, IS_MOBILE ? 1.0 : 0.6, 12);
+    // Add red arrow for X-axis - MUCH LARGER on mobile
+    const xArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.8 : 0.2, IS_MOBILE ? 1.6 : 0.4, 12);
     const xArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.xAxis });
     const xArrow = new THREE.Mesh(xArrowGeo, xArrowMat);
     xArrow.position.set(axisLength, 0, 0);
@@ -218,8 +262,8 @@ function addAxesAtCorner() {
     const yAxis = new THREE.Line(yAxisGeo, yAxisMat);
     gameGroup.add(yAxis);
     
-    // Add green arrow for Y-axis
-    const yArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.5 : 0.3, IS_MOBILE ? 1.0 : 0.6, 12);
+    // Add green arrow for Y-axis - MUCH LARGER on mobile
+    const yArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.8 : 0.2, IS_MOBILE ? 1.6 : 0.4, 12);
     const yArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.yAxis });
     const yArrow = new THREE.Mesh(yArrowGeo, yArrowMat);
     yArrow.position.set(0, axisLength, 0);
@@ -235,8 +279,8 @@ function addAxesAtCorner() {
     const zAxis = new THREE.Line(zAxisGeo, zAxisMat);
     gameGroup.add(zAxis);
     
-    // Add blue arrow for Z-axis
-    const zArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.5 : 0.3, IS_MOBILE ? 1.0 : 0.6, 12);
+    // Add blue arrow for Z-axis - MUCH LARGER on mobile
+    const zArrowGeo = new THREE.ConeGeometry(IS_MOBILE ? 0.8 : 0.2, IS_MOBILE ? 1.6 : 0.4, 12);
     const zArrowMat = new THREE.MeshBasicMaterial({ color: COLORS.zAxis });
     const zArrow = new THREE.Mesh(zArrowGeo, zArrowMat);
     zArrow.position.set(0, 0, axisLength);
@@ -250,7 +294,7 @@ function createMobileControls() {
     const controlsContainer = document.createElement('div');
     controlsContainer.id = 'mobile-controls';
     controlsContainer.style.position = 'fixed';
-    controlsContainer.style.bottom = '10px';
+    controlsContainer.style.bottom = '20px';
     controlsContainer.style.left = '0';
     controlsContainer.style.width = '100%';
     controlsContainer.style.zIndex = '1000';
@@ -258,12 +302,12 @@ function createMobileControls() {
     controlsContainer.style.justifyContent = 'center';
     controlsContainer.style.alignItems = 'center';
     
-    // Create a 3x3 grid layout
+    // Create a 3x3 grid layout with larger buttons
     const buttonContainer = document.createElement('div');
     buttonContainer.style.display = 'grid';
-    buttonContainer.style.gridTemplateColumns = 'repeat(3, 50px)';
-    buttonContainer.style.gridTemplateRows = 'repeat(3, 50px)';
-    buttonContainer.style.gap = '2px';
+    buttonContainer.style.gridTemplateColumns = 'repeat(3, 60px)';
+    buttonContainer.style.gridTemplateRows = 'repeat(3, 60px)';
+    buttonContainer.style.gap = '4px';
     
     // Create the buttons WITHOUT text
     const leftButton = createDirectionButton('←', COLORS.xAxis, () => queueDirectionChange({ x: -1, y: 0, z: 0 }));
@@ -323,26 +367,27 @@ function createDirectionButton(arrowSymbol, color, clickHandler) {
         return `rgb(${r}, ${g}, ${b})`;
     };
     
-    // Style the button - SMALL and SIMPLE
+    // Style the button - LARGER and MORE VISIBLE
     button.style.width = '100%';
     button.style.height = '100%';
-    button.style.fontSize = '24px';
-    button.style.borderRadius = '8px';
+    button.style.fontSize = '30px';
+    button.style.borderRadius = '10px';
     button.style.background = hexToRgb(color);
     button.style.color = 'white';
     button.style.border = 'none';
-    button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+    button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.5)';
     button.style.outline = 'none';
     button.style.cursor = 'pointer';
     button.style.display = 'flex';
     button.style.justifyContent = 'center';
     button.style.alignItems = 'center';
     button.style.padding = '0';
+    button.style.fontWeight = 'bold';
     
     // Add active feedback
     button.addEventListener('touchstart', (e) => {
         button.style.transform = 'scale(0.95)';
-        button.style.boxShadow = '0 1px 2px rgba(0,0,0,0.3)';
+        button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.5)';
         e.preventDefault(); // Prevent default to avoid double-tap zooming
         
         // Call the handler immediately for responsiveness
@@ -351,7 +396,7 @@ function createDirectionButton(arrowSymbol, color, clickHandler) {
     
     button.addEventListener('touchend', (e) => {
         button.style.transform = 'scale(1)';
-        button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+        button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.5)';
         e.preventDefault(); // Prevent default behavior
     });
     
@@ -437,37 +482,159 @@ function createFood() {
     gameGroup.add(foodMesh);
 }
 
-// Handle touch start (for non-mobile devices)
+// Handle touch start
 function handleTouchStart(event) {
     if (isGameOver) return;
     
+    // Prevent default to avoid scrolling
+    event.preventDefault();
+    
+    // For mobile, handle different touch events
+    if (IS_MOBILE) {
+        // Handle two-finger touch (for pinch-zoom AND rotation)
+        if (event.touches.length === 2) {
+            const touch1 = event.touches[0];
+            const touch2 = event.touches[1];
+            
+            // Calculate initial distance for scaling
+            pinchStartDistance = Math.hypot(
+                touch2.clientX - touch1.clientX,
+                touch2.clientY - touch1.clientY
+            );
+            
+            // Calculate center point between fingers for rotation
+            lastCenterX = (touch1.clientX + touch2.clientX) / 2;
+            
+            isSingleTouch = false;
+        } 
+        // Handle single touch (for rotation)
+        else if (event.touches.length === 1) {
+            const touch = event.touches[0];
+            lastTouchX = touch.clientX;
+            isSingleTouch = true;
+        }
+        return;
+    }
+    
+    // For desktop touch (non-mobile) - handle as before for swipes
     const touch = event.touches[0];
     const touchX = touch.clientX;
     const touchY = touch.clientY;
     const touchTime = Date.now();
     
-    // Store touch start data
+    // Store touch start data for desktop
     this.touchStartX = touchX;
     this.touchStartY = touchY;
     this.touchStartTime = touchTime;
-    
-    // Prevent default to avoid scrolling
-    event.preventDefault();
 }
 
-// Handle touch move (for non-mobile devices)
+// Handle touch move
 function handleTouchMove(event) {
     // Prevent default to avoid scrolling
     event.preventDefault();
+    
+    // For mobile devices
+    if (IS_MOBILE) {
+        // Handle two-finger touch (for simultaneous pinch-zoom AND rotation)
+        if (event.touches.length === 2) {
+            const touch1 = event.touches[0];
+            const touch2 = event.touches[1];
+            
+            // --- HANDLE SCALING ---
+            // Calculate the current distance between two fingers
+            const currentDistance = Math.hypot(
+                touch2.clientX - touch1.clientX,
+                touch2.clientY - touch1.clientY
+            );
+            
+            // Skip if we don't have a valid starting distance
+            if (pinchStartDistance > 10) {
+                // Calculate the scale factor
+                const scaleFactor = currentDistance / pinchStartDistance;
+                
+                // Update the current scale, keeping it within bounds
+                const newScale = Math.max(MIN_SCALE, Math.min(currentScale * scaleFactor, MAX_SCALE));
+                
+                // Only apply if scale has changed significantly
+                if (Math.abs(newScale - currentScale) > 0.02) {
+                    // Apply the scale to the game group
+                    gameGroup.scale.set(newScale, newScale, newScale);
+                    currentScale = newScale;
+                    
+                    // Reset the start distance for continuous scaling
+                    pinchStartDistance = currentDistance;
+                    
+                    // Save settings to localStorage
+                    saveSettings();
+                }
+            }
+            
+            // --- HANDLE ROTATION (simultaneously) ---
+            // Calculate center point between fingers
+            const currentCenterX = (touch1.clientX + touch2.clientX) / 2;
+            
+            // Calculate the change in center X position
+            const deltaCenterX = currentCenterX - lastCenterX;
+            
+            // Update rotation - only around Y axis (horizontal rotation)
+            if (Math.abs(deltaCenterX) > 1) {
+                // Convert pixel movement to rotation (adjust sensitivity)
+                const rotationDelta = deltaCenterX * 0.01;
+                currentRotationY += rotationDelta;
+                
+                // Apply rotation to game group - ONLY Y axis
+                gameGroup.rotation.y = currentRotationY;
+                
+                // Update last center position
+                lastCenterX = currentCenterX;
+                
+                // Save settings to localStorage
+                saveSettings();
+            }
+        }
+        // Handle horizontal rotation with one finger
+        else if (isSingleTouch && event.touches.length === 1) {
+            const touch = event.touches[0];
+            const touchX = touch.clientX;
+            
+            // Calculate the change in X position
+            const deltaX = touchX - lastTouchX;
+            
+            // Update rotation - only around Y axis (horizontal rotation)
+            if (Math.abs(deltaX) > 1) {
+                // Convert pixel movement to rotation (adjust sensitivity)
+                const rotationDelta = deltaX * 0.01;
+                currentRotationY += rotationDelta;
+                
+                // Apply rotation to game group - ONLY Y axis
+                gameGroup.rotation.y = currentRotationY;
+                
+                // Update last position
+                lastTouchX = touchX;
+                
+                // Save settings to localStorage
+                saveSettings();
+            }
+        }
+    }
+    // Non-mobile devices don't need special handling here
 }
 
-// Handle touch end (for non-mobile devices)
+// Handle touch end
 function handleTouchEnd(event) {
     if (isGameOver) return;
     
     // Prevent default action
     event.preventDefault();
     
+    // Reset mobile touch tracking flags
+    if (IS_MOBILE) {
+        isSingleTouch = false;
+        pinchStartDistance = 0;
+        return; // No swipe gestures on mobile - exit early
+    }
+    
+    // Desktop touch processing for swipes - only for non-mobile
     // If no start touch registered, exit
     if (!this.touchStartX || !this.touchStartY) return;
     
@@ -482,45 +649,44 @@ function handleTouchEnd(event) {
     const deltaY = touchEndY - this.touchStartY;
     const deltaTime = touchEndTime - this.touchStartTime;
     
-    // Minimum swipe distance and maximum time for a swipe
+    // Only handle as swipe if it was quick and long enough
     const minSwipeDistance = 20; // Lower threshold to make swipes more responsive
     const maxSwipeTime = 600; // Longer time window for swipe detection
     
-    // If swipe was too slow or too short, ignore it
-    if (deltaTime > maxSwipeTime || 
-        (Math.abs(deltaX) < minSwipeDistance && Math.abs(deltaY) < minSwipeDistance)) {
-        return;
-    }
-    
-    // Determine primary swipe direction
-    if (Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-        // Clear horizontal swipe (X-axis/red)
-        if (deltaX > 0) {
-            // Right swipe - positive X
-            queueDirectionChange({ x: 1, y: 0, z: 0 });
-        } else {
-            // Left swipe - negative X
-            queueDirectionChange({ x: -1, y: 0, z: 0 });
+    // If this was a very short touch, treat it as a swipe for direction
+    if (deltaTime < maxSwipeTime && 
+        (Math.abs(deltaX) > minSwipeDistance || Math.abs(deltaY) > minSwipeDistance)) {
+        
+        // Determine primary swipe direction
+        if (Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+            // Clear horizontal swipe (X-axis/red)
+            if (deltaX > 0) {
+                // Right swipe - positive X
+                queueDirectionChange({ x: 1, y: 0, z: 0 });
+            } else {
+                // Left swipe - negative X
+                queueDirectionChange({ x: -1, y: 0, z: 0 });
+            }
+        } 
+        else if (Math.abs(deltaY) > Math.abs(deltaX) * 1.5) {
+            // Clear vertical swipe - Y-axis/green
+            if (deltaY < 0) {
+                // Up swipe - positive Y
+                queueDirectionChange({ x: 0, y: 1, z: 0 });
+            } else {
+                // Down swipe - negative Y
+                queueDirectionChange({ x: 0, y: -1, z: 0 });
+            }
         }
-    } 
-    else if (Math.abs(deltaY) > Math.abs(deltaX) * 1.5) {
-        // Clear vertical swipe - Y-axis/green
-        if (deltaY < 0) {
-            // Up swipe - positive Y
-            queueDirectionChange({ x: 0, y: 1, z: 0 });
-        } else {
-            // Down swipe - negative Y
-            queueDirectionChange({ x: 0, y: -1, z: 0 });
-        }
-    }
-    else {
-        // Diagonal swipe - Z-axis/blue (45 degree swipe)
-        if (deltaY < 0 && deltaX > 0 || deltaY > 0 && deltaX < 0) {
-            // Up-right or down-left = into screen (negative Z)
-            queueDirectionChange({ x: 0, y: 0, z: -1 });
-        } else {
-            // Up-left or down-right = out of screen (positive Z)
-            queueDirectionChange({ x: 0, y: 0, z: 1 });
+        else {
+            // Diagonal swipe - Z-axis/blue (45 degree swipe)
+            if (deltaY < 0 && deltaX > 0 || deltaY > 0 && deltaX < 0) {
+                // Up-right or down-left = into screen (negative Z)
+                queueDirectionChange({ x: 0, y: 0, z: -1 });
+            } else {
+                // Up-left or down-right = out of screen (positive Z)
+                queueDirectionChange({ x: 0, y: 0, z: 1 });
+            }
         }
     }
 }
@@ -696,26 +862,18 @@ function moveSnake() {
         return;
     }
     
-    // Check if eating food - use a more tolerant check for mobile
+    // Check if eating food - use a more tolerant check for all platforms
     let isEating = false;
     
-    if (IS_MOBILE) {
-        // Use distance-based check for mobile to be more forgiving
-        const distanceToFood = Math.sqrt(
-            Math.pow(food.position.x - newHeadPosition.x, 2) +
-            Math.pow(food.position.y - newHeadPosition.y, 2) +
-            Math.pow(food.position.z - newHeadPosition.z, 2)
-        );
-        
-        isEating = distanceToFood < UNIT_SIZE * 0.8;
-    } else {
-        // Desktop uses exact collision
-        isEating = (
-            newHeadPosition.x === food.position.x &&
-            newHeadPosition.y === food.position.y &&
-            newHeadPosition.z === food.position.z
-        );
-    }
+    // Use distance-based check for more forgiving collision
+    const distanceToFood = Math.sqrt(
+        Math.pow(food.position.x - newHeadPosition.x, 2) +
+        Math.pow(food.position.y - newHeadPosition.y, 2) +
+        Math.pow(food.position.z - newHeadPosition.z, 2)
+    );
+    
+    // More forgiving collision for all platforms
+    isEating = distanceToFood < UNIT_SIZE * 0.8;
     
     // Create new head
     const snakeGeometry = new THREE.BoxGeometry(UNIT_SIZE * 0.9, UNIT_SIZE * 0.9, UNIT_SIZE * 0.9);
@@ -767,6 +925,8 @@ function restartGame() {
     score = 0;
     isGameOver = false;
     
+    // DO NOT reset zoom scale and rotation on mobile - preserve user preferences
+    
     // Set initial direction to move right
     direction = { x: 1, y: 0, z: 0 };
     nextDirection = { x: 1, y: 0, z: 0 };
@@ -805,6 +965,21 @@ function handleResize() {
 function animate() {
     requestAnimationFrame(animate);
     renderer.render(scene, camera);
+}
+
+// Save current settings to localStorage
+function saveSettings() {
+    if (IS_MOBILE) {
+        try {
+            const settings = {
+                rotation: currentRotationY,
+                scale: currentScale
+            };
+            localStorage.setItem('snake3dSettings', JSON.stringify(settings));
+        } catch (e) {
+            // Silently fail if localStorage is not available
+        }
+    }
 }
 
 // Start the game when the page loads
